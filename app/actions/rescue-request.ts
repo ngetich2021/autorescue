@@ -48,19 +48,17 @@ export async function createRescueRequest(
   return { success: true };
 }
 
-export async function updateRequestStatus(
-  _prevState: ActionState,
-  formData: FormData,
+// For a status Select in a table row — see components/shops/shop-manage-dashboard.tsx.
+export async function setRequestStatus(
+  requestId: string,
+  status: string,
 ): Promise<ActionState> {
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const parsed = updateRequestStatusSchema.safeParse({
-    requestId: formData.get("requestId"),
-    status: formData.get("status"),
-  });
+  const parsed = updateRequestStatusSchema.safeParse({ requestId, status });
   if (!parsed.success) {
-    return { fieldErrors: parsed.error.flatten().fieldErrors };
+    return { error: "Invalid status." };
   }
 
   const providerId = await getMyShopId(session.user.id);

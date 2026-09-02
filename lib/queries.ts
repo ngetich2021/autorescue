@@ -1,10 +1,20 @@
 import { db } from "@/lib/db";
 import { haversineDistanceKm } from "@/lib/geo";
 import { parseServiceTypes } from "@/lib/authz";
-import { toAdColor, toAdTextColor, type ServiceType } from "@/lib/validations";
+import {
+  toAdColor,
+  toAdTextColor,
+  UNVERIFIED_VISIBILITY_RADIUS_KM,
+  type ServiceType,
+} from "@/lib/validations";
 
 function withDistanceAndServiceTypes<
-  T extends { latitude: number; longitude: number; serviceTypes: string },
+  T extends {
+    latitude: number;
+    longitude: number;
+    serviceTypes: string;
+    isVerified: boolean;
+  },
 >(
   providers: T[],
   { latitude, longitude, radiusKm, serviceType }: {
@@ -25,18 +35,36 @@ function withDistanceAndServiceTypes<
         provider.longitude,
       ),
     }))
-    .filter((provider) => provider.distanceKm <= radiusKm)
+    .filter((provider) => {
+      // Unverified shops (the default — see the KES 20 badge in
+      // app/actions/payment.ts#initiateBadgePayment) are only discoverable
+      // within a fixed short radius, no matter how wide the customer's own
+      // search radius is.
+      const effectiveRadiusKm = provider.isVerified
+        ? radiusKm
+        : Math.min(radiusKm, UNVERIFIED_VISIBILITY_RADIUS_KM);
+      return provider.distanceKm <= effectiveRadiusKm;
+    })
     .filter((provider) =>
       serviceType ? provider.serviceTypes.includes(serviceType) : true,
     )
     .sort((a, b) => a.distanceKm - b.distanceKm);
 }
 
-const SHOP_INCLUDE = {
-  products: { orderBy: { createdAt: "desc" as const } },
-  services: { orderBy: { createdAt: "desc" as const } },
-  shopAds: { where: { isActive: true }, orderBy: { createdAt: "desc" as const } },
-};
+// A promotion only counts as live once it's been paid for and hasn't
+// expired — see app/api/mpesa/callback/route.ts, which is what actually
+// sets expiresAt once a promotion payment completes. Built fresh per call
+// (not a module-level constant) so `now` is never stale.
+function shopInclude() {
+  return {
+    products: { orderBy: { createdAt: "desc" as const } },
+    services: { orderBy: { createdAt: "desc" as const } },
+    shopAds: {
+      where: { isActive: true, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" as const },
+    },
+  };
+}
 
 // Shared shaping for a provider row (with products/shopAds included) into
 // the DTO the shop-facing UI (ShopCard, ShopProductsModal) expects.
@@ -77,7 +105,7 @@ export async function getNearbyProviders(params: {
 }) {
   const providers = await db.providerProfile.findMany({
     where: { isActive: true },
-    include: SHOP_INCLUDE,
+    include: shopInclude(),
   });
 
   const matching = params.q
@@ -96,7 +124,7 @@ export async function getShopWithDistance(
 ) {
   const shop = await db.providerProfile.findFirst({
     where: { id: providerId, isActive: true },
-    include: SHOP_INCLUDE,
+    include: shopInclude(),
   });
   if (!shop) return null;
 
@@ -105,6 +133,10 @@ export async function getShopWithDistance(
     longitude,
     radiusKm: Infinity,
   });
+  // Unverified shops are still capped to the short discovery radius (see
+  // withDistanceAndServiceTypes) even when linked to directly — the filter
+  // above can legitimately drop the only row.
+  if (!withDistance) return null;
   return toShopDto(withDistance);
 }
 
@@ -128,7 +160,7 @@ export async function getActiveBrandAds() {
 // brand-ad targeting.
 export async function getActiveShopAdsForHero() {
   const ads = await db.shopAd.findMany({
-    where: { isActive: true },
+    where: { isActive: true, expiresAt: { gt: new Date() } },
     include: { provider: true },
     orderBy: { createdAt: "desc" },
     take: 10,

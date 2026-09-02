@@ -59,7 +59,7 @@ export function AdvertiseFormModal({
               </p>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="grid gap-1.5">
               <Label htmlFor="contactEmail">Contact email</Label>
               <Input id="contactEmail" name="contactEmail" type="email" required />
@@ -99,10 +99,11 @@ export function AdvertiseFormModal({
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="productName">Product name</Label>
-            <Input id="productName" name="productName" placeholder="e.g. Skygo Oil" required />
+            <Input id="productName" name="productName" placeholder="e.g. brake-boxer" required />
             <p className="text-xs text-muted-foreground">
-              The exact item name — this is what &quot;Find nearby shops&quot;
-              searches for across every shop&apos;s products.
+              Use a &ldquo;category-brand&rdquo; format (e.g. &ldquo;brake-boxer&rdquo;)
+              — this is what &quot;Find nearby shops&quot; searches for across
+              every shop&apos;s products.
             </p>
             {state.fieldErrors?.productName && (
               <p className="text-xs text-destructive">

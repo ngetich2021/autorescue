@@ -11,7 +11,107 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
+import { DataTable, type DataTableColumn } from "@/components/admin/data-table";
 import type { ShopDto } from "./shop-card";
+
+type ProductRow = ShopDto["products"][number];
+type ServiceRow = ShopDto["services"][number];
+
+const productColumns: DataTableColumn<ProductRow>[] = [
+  {
+    key: "name",
+    header: "Product",
+    sortable: true,
+    sortValue: (row) => row.name.toLowerCase(),
+    render: (row) => (
+      <div className="flex flex-col">
+        <span className="font-medium">{row.name}</span>
+        {row.description && (
+          <span className="line-clamp-1 text-xs text-muted-foreground">
+            {row.description}
+          </span>
+        )}
+      </div>
+    ),
+  },
+  {
+    key: "price",
+    header: "Price",
+    sortable: true,
+    sortValue: (row) => row.price,
+    render: (row) => `KES ${row.price.toLocaleString()}`,
+  },
+  {
+    key: "status",
+    header: "Status",
+    sortable: true,
+    sortValue: (row) => (row.inStock ? 1 : 0),
+    render: (row) => (
+      <Badge variant={row.inStock ? "secondary" : "outline"}>
+        {row.inStock ? "In stock" : "Out of stock"}
+      </Badge>
+    ),
+  },
+];
+
+const serviceColumns: DataTableColumn<ServiceRow>[] = [
+  {
+    key: "name",
+    header: "Service",
+    sortable: true,
+    sortValue: (row) => row.name.toLowerCase(),
+    render: (row) => (
+      <div className="flex flex-col">
+        <span className="font-medium">{row.name}</span>
+        {row.description && (
+          <span className="line-clamp-1 text-xs text-muted-foreground">
+            {row.description}
+          </span>
+        )}
+      </div>
+    ),
+  },
+  {
+    key: "price",
+    header: "Price",
+    sortable: true,
+    sortValue: (row) => row.price,
+    render: (row) => `KES ${row.price.toLocaleString()}`,
+  },
+  {
+    key: "status",
+    header: "Status",
+    sortable: true,
+    sortValue: (row) => (row.isAvailable ? 1 : 0),
+    render: (row) => (
+      <Badge variant={row.isAvailable ? "secondary" : "outline"}>
+        {row.isAvailable ? "Available" : "Unavailable"}
+      </Badge>
+    ),
+  },
+];
+
+const STOCK_FILTER = {
+  key: "status",
+  label: "Status",
+  options: [
+    { value: "yes", label: "In stock" },
+    { value: "no", label: "Out of stock" },
+  ],
+  predicate: (row: ProductRow, value: string) =>
+    value === "yes" ? row.inStock : !row.inStock,
+};
+
+const AVAILABILITY_FILTER = {
+  key: "status",
+  label: "Status",
+  options: [
+    { value: "yes", label: "Available" },
+    { value: "no", label: "Unavailable" },
+  ],
+  predicate: (row: ServiceRow, value: string) =>
+    value === "yes" ? row.isAvailable : !row.isAvailable,
+};
 
 export function ShopProductsModal({
   open,
@@ -24,7 +124,7 @@ export function ShopProductsModal({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{shop.businessName}</DialogTitle>
           <DialogDescription>
@@ -79,42 +179,14 @@ export function ShopProductsModal({
                     Products
                   </h3>
                 )}
-                <div className="flex flex-col gap-3">
-                  {shop.products.map((product) => (
-                    <div
-                      key={product.id}
-                      className="flex gap-3 rounded-lg border p-3"
-                    >
-                      {product.imageUrl ? (
-                        <Image
-                          src={product.imageUrl}
-                          alt={product.name}
-                          width={64}
-                          height={64}
-                          className="size-16 shrink-0 rounded-md object-cover"
-                        />
-                      ) : (
-                        <div className="size-16 shrink-0 rounded-md bg-muted" />
-                      )}
-                      <div className="flex flex-1 flex-col gap-0.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">{product.name}</span>
-                          <Badge variant={product.inStock ? "secondary" : "outline"}>
-                            {product.inStock ? "In stock" : "Out of stock"}
-                          </Badge>
-                        </div>
-                        {product.description && (
-                          <p className="text-sm text-muted-foreground">
-                            {product.description}
-                          </p>
-                        )}
-                        <span className="text-sm font-medium">
-                          KES {product.price.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <DataTable
+                  columns={productColumns}
+                  data={shop.products}
+                  searchPlaceholder="Search products…"
+                  searchValue={(row) => `${row.name} ${row.description ?? ""}`}
+                  filters={[STOCK_FILTER]}
+                  emptyMessage="No products listed."
+                />
               </div>
             )}
 
@@ -125,42 +197,14 @@ export function ShopProductsModal({
                     Services
                   </h3>
                 )}
-                <div className="flex flex-col gap-3">
-                  {shop.services.map((service) => (
-                    <div
-                      key={service.id}
-                      className="flex gap-3 rounded-lg border p-3"
-                    >
-                      {service.imageUrl ? (
-                        <Image
-                          src={service.imageUrl}
-                          alt={service.name}
-                          width={64}
-                          height={64}
-                          className="size-16 shrink-0 rounded-md object-cover"
-                        />
-                      ) : (
-                        <div className="size-16 shrink-0 rounded-md bg-muted" />
-                      )}
-                      <div className="flex flex-1 flex-col gap-0.5">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-medium">{service.name}</span>
-                          <Badge variant={service.isAvailable ? "secondary" : "outline"}>
-                            {service.isAvailable ? "Available" : "Unavailable"}
-                          </Badge>
-                        </div>
-                        {service.description && (
-                          <p className="text-sm text-muted-foreground">
-                            {service.description}
-                          </p>
-                        )}
-                        <span className="text-sm font-medium">
-                          KES {service.price.toLocaleString()}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <DataTable
+                  columns={serviceColumns}
+                  data={shop.services}
+                  searchPlaceholder="Search services…"
+                  searchValue={(row) => `${row.name} ${row.description ?? ""}`}
+                  filters={[AVAILABILITY_FILTER]}
+                  emptyMessage="No services listed."
+                />
               </div>
             )}
           </>

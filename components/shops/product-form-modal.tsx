@@ -63,7 +63,17 @@ export function ProductFormModal({
         <form action={formAction} className="flex flex-col gap-3">
           <div className="grid gap-1.5">
             <Label htmlFor="name">Name</Label>
-            <Input id="name" name="name" defaultValue={product?.name} required />
+            <Input
+              id="name"
+              name="name"
+              defaultValue={product?.name}
+              placeholder="e.g. brake-boxer"
+              required
+            />
+            <p className="text-xs text-muted-foreground">
+              Use a &ldquo;category-brand&rdquo; format (e.g. &ldquo;brake-boxer&rdquo;)
+              so customers searching by category or brand can find it.
+            </p>
             {state.fieldErrors?.name && (
               <p className="text-xs text-destructive">
                 {state.fieldErrors.name[0]}

@@ -1,8 +1,14 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getMyShopId } from "@/lib/authz";
-import { getMyProducts, getMyServices, getMyShopAds } from "@/lib/queries";
+import { getMyShopId, hasShopPermission } from "@/lib/authz";
+import {
+  getMyProducts,
+  getMyServices,
+  getMyShopAds,
+  getIncomingRequests,
+  getShopById,
+} from "@/lib/queries";
 import { ShopManageDashboard } from "@/components/shops/shop-manage-dashboard";
 
 export const metadata: Metadata = {
@@ -19,20 +25,29 @@ export default async function ShopManagePage() {
   if (!session?.user) redirect("/");
 
   const providerId = await getMyShopId(session.user.id);
-  const [products, services, ads] = providerId
+  const canManageRequests =
+    providerId !== null &&
+    (await hasShopPermission(session.user.id, providerId, "MANAGE_REQUESTS"));
+
+  const [products, services, ads, requests, provider] = providerId
     ? await Promise.all([
         getMyProducts(providerId),
         getMyServices(providerId),
         getMyShopAds(providerId),
+        canManageRequests ? getIncomingRequests(providerId) : Promise.resolve([]),
+        getShopById(providerId),
       ])
-    : [[], [], []];
+    : [[], [], [], [], null];
 
   return (
     <ShopManageDashboard
       hasProvider={providerId !== null}
+      canManageRequests={canManageRequests}
+      isVerified={provider?.isVerified ?? false}
       initialProducts={products}
       initialServices={services}
       initialAds={ads}
+      initialRequests={requests}
     />
   );
 }

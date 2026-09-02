@@ -3,36 +3,86 @@
 import { useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Loader2, ArrowLeft, Settings2 } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  ArrowLeft,
+  Settings2,
+  MapPin,
+  ShieldCheck,
+  BadgeCheck,
+} from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DataTable, type DataTableColumn } from "@/components/admin/data-table";
 import { ProductFormModal, type MyProductDto } from "./product-form-modal";
 import { ServiceFormModal, type MyServiceDto } from "./service-form-modal";
 import { ShopAdFormModal, type MyShopAdDto } from "./shop-ad-form-modal";
+import { MpesaPayModal } from "./mpesa-pay-modal";
 import { ProviderProfileFormModal } from "@/components/providers/provider-profile-form-modal";
 import { deleteProduct } from "@/app/actions/product";
 import { deleteService } from "@/app/actions/service";
 import { deleteShopAd, toggleShopAdActive } from "@/app/actions/shop-ad";
+import { setRequestStatus } from "@/app/actions/rescue-request";
 import { useAsyncAction } from "@/lib/use-async-action";
+import {
+  REQUEST_STATUSES,
+  SERVICE_TYPE_LABELS,
+  PROMOTION_LOCAL_RATE_KES,
+  PROMOTION_UNIVERSAL_RATE_KES,
+  VERIFICATION_BADGE_FEE_KES,
+  type RequestStatus,
+  type ServiceType,
+} from "@/lib/validations";
+
+export type MyRequestDto = {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  description: string | null;
+  serviceType: string;
+  latitude: number;
+  longitude: number;
+  status: string;
+  createdAt: string | Date;
+};
 
 export function ShopManageDashboard({
   hasProvider,
+  canManageRequests,
+  isVerified,
   initialProducts,
   initialServices,
   initialAds,
+  initialRequests,
 }: {
   hasProvider: boolean;
+  canManageRequests: boolean;
+  isVerified: boolean;
   initialProducts: MyProductDto[];
   initialServices: MyServiceDto[];
   initialAds: MyShopAdDto[];
+  initialRequests: MyRequestDto[];
 }) {
   const [hasProviderState, setHasProviderState] = useState(hasProvider);
+  const [verifiedState, setVerifiedState] = useState(isVerified);
   const [products, setProducts] = useState(initialProducts);
   const [services, setServices] = useState(initialServices);
   const [ads, setAds] = useState(initialAds);
+  const [requests, setRequests] = useState(initialRequests);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [badgePayOpen, setBadgePayOpen] = useState(false);
+  const [promoPayAd, setPromoPayAd] = useState<MyShopAdDto | null>(null);
 
   const [productFormOpen, setProductFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<MyProductDto | null>(null);
@@ -42,18 +92,26 @@ export function ShopManageDashboard({
   const [editingAd, setEditingAd] = useState<MyShopAdDto | null>(null);
 
   async function refresh() {
-    const [productsData, servicesData, adsData] = await Promise.all([
-      fetch("/api/me/products").then((res) => res.json()),
-      fetch("/api/me/services").then((res) => res.json()),
-      fetch("/api/me/shop-ads").then((res) => res.json()),
-    ]);
+    const [productsData, servicesData, adsData, requestsData, providerData] =
+      await Promise.all([
+        fetch("/api/me/products").then((res) => res.json()),
+        fetch("/api/me/services").then((res) => res.json()),
+        fetch("/api/me/shop-ads").then((res) => res.json()),
+        canManageRequests
+          ? fetch("/api/me/requests").then((res) => res.json())
+          : Promise.resolve({ requests }),
+        fetch("/api/me/provider").then((res) => res.json()),
+      ]);
     setProducts(productsData.products ?? []);
     setServices(servicesData.services ?? []);
     setAds(adsData.ads ?? []);
+    setRequests(requestsData.requests ?? []);
     // Posting the shop listing for the first time (via the "Shop profile"
     // modal below) flips this mid-session — re-derive it from the same
-    // fetch instead of trusting the server-rendered prop forever.
+    // fetch instead of trusting the server-rendered prop forever. Same for
+    // verification: a badge payment completing flips it without a reload.
     setHasProviderState(productsData.hasProvider ?? false);
+    setVerifiedState(providerData.profile?.isVerified ?? false);
   }
 
   const productColumns: DataTableColumn<MyProductDto>[] = [
@@ -191,7 +249,15 @@ export function ShopManageDashboard({
       key: "radius",
       header: "Reach",
       render: (row) =>
-        row.radiusKm == null ? "Universal" : `Within ${row.radiusKm} km`,
+        row.radiusKm == null
+          ? `Universal (KES ${PROMOTION_UNIVERSAL_RATE_KES}/day)`
+          : `Within ${row.radiusKm} km (KES ${PROMOTION_LOCAL_RATE_KES}/day)`,
+    },
+    {
+      key: "payment",
+      header: "Payment",
+      stopRowClick: true,
+      render: (row) => <AdPaymentCell ad={row} onPay={() => setPromoPayAd(row)} />,
     },
     {
       key: "status",
@@ -223,16 +289,86 @@ export function ShopManageDashboard({
     },
   ];
 
+  const requestColumns: DataTableColumn<MyRequestDto>[] = [
+    {
+      key: "customer",
+      header: "Customer",
+      sortable: true,
+      sortValue: (row) => row.customerName.toLowerCase(),
+      render: (row) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{row.customerName}</span>
+          <span className="text-xs text-muted-foreground">{row.customerPhone}</span>
+        </div>
+      ),
+    },
+    {
+      key: "service",
+      header: "Needs",
+      render: (row) => (
+        <Badge variant="secondary">
+          {SERVICE_TYPE_LABELS[row.serviceType as ServiceType] ?? row.serviceType}
+        </Badge>
+      ),
+    },
+    {
+      key: "location",
+      header: "Location",
+      render: (row) => (
+        <a
+          href={`https://www.google.com/maps?q=${row.latitude},${row.longitude}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-primary hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MapPin className="size-3.5" /> Open in Maps
+        </a>
+      ),
+    },
+    {
+      key: "received",
+      header: "Received",
+      sortable: true,
+      sortValue: (row) => new Date(row.createdAt).getTime(),
+      render: (row) => new Date(row.createdAt).toLocaleString(),
+    },
+    {
+      key: "status",
+      header: "Status",
+      stopRowClick: true,
+      sortable: true,
+      sortValue: (row) => row.status,
+      render: (row) => <RequestStatusCell request={row} onChanged={refresh} />,
+    },
+  ];
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold">Manage your shop</h1>
           <p className="text-sm text-muted-foreground">
-            Products, services, and promotions customers see when they find you.
+            Products, services, promotions, and rescue requests from customers.
           </p>
+          {hasProviderState && !verifiedState && (
+            <p className="text-xs text-amber-600 dark:text-amber-500">
+              Unverified — customers can only find your shop within 100m.
+              Get verified to be discoverable at your normal search radius.
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {hasProviderState &&
+            (verifiedState ? (
+              <Badge variant="secondary" className="gap-1">
+                <BadgeCheck className="size-3.5" /> Verified
+              </Badge>
+            ) : (
+              <Button variant="outline" onClick={() => setBadgePayOpen(true)}>
+                <ShieldCheck /> Get verified — KES {VERIFICATION_BADGE_FEE_KES}
+              </Button>
+            ))}
           <Button variant="outline" onClick={() => setProfileOpen(true)}>
             <Settings2 /> Shop profile
           </Button>
@@ -256,6 +392,9 @@ export function ShopManageDashboard({
             <TabsTrigger value="products">Products</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
             <TabsTrigger value="promotions">Promotions</TabsTrigger>
+            {canManageRequests && (
+              <TabsTrigger value="requests">Requests</TabsTrigger>
+            )}
           </TabsList>
 
           <TabsContent value="products" className="flex flex-col gap-3 pt-4">
@@ -321,6 +460,33 @@ export function ShopManageDashboard({
               emptyMessage="No promotions yet."
             />
           </TabsContent>
+
+          {canManageRequests && (
+            <TabsContent value="requests" className="flex flex-col gap-3 pt-4">
+              <p className="text-sm text-muted-foreground">
+                Customers share their location when they request a rescue —
+                open it in Maps to see exactly where they are.
+              </p>
+              <DataTable
+                columns={requestColumns}
+                data={requests}
+                searchPlaceholder="Search requests…"
+                searchValue={(row) => `${row.customerName} ${row.customerPhone}`}
+                filters={[
+                  {
+                    key: "status",
+                    label: "Status",
+                    options: REQUEST_STATUSES.map((status) => ({
+                      value: status,
+                      label: status.charAt(0) + status.slice(1).toLowerCase(),
+                    })),
+                    predicate: (row, value) => row.status === value,
+                  },
+                ]}
+                emptyMessage="No rescue requests yet."
+              />
+            </TabsContent>
+          )}
         </Tabs>
       )}
 
@@ -353,6 +519,22 @@ export function ShopManageDashboard({
           if (!open) refresh();
         }}
       />
+      <MpesaPayModal
+        open={badgePayOpen}
+        onOpenChange={setBadgePayOpen}
+        purpose="BADGE"
+        onPaid={refresh}
+      />
+      {promoPayAd && (
+        <MpesaPayModal
+          open={promoPayAd !== null}
+          onOpenChange={(open) => !open && setPromoPayAd(null)}
+          purpose="PROMOTION"
+          shopAdId={promoPayAd.id}
+          isUniversal={promoPayAd.radiusKm == null}
+          onPaid={refresh}
+        />
+      )}
     </div>
   );
 }
@@ -375,6 +557,64 @@ function RowActions({
         {deleting ? <Loader2 className="animate-spin" /> : <Trash2 className="text-destructive" />}
       </Button>
     </div>
+  );
+}
+
+function AdPaymentCell({
+  ad,
+  onPay,
+}: {
+  ad: MyShopAdDto;
+  onPay: () => void;
+}) {
+  const paidThrough = ad.expiresAt ? new Date(ad.expiresAt) : null;
+  const live = paidThrough != null && paidThrough > new Date();
+
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <span className="text-xs text-muted-foreground">
+        {live
+          ? `Paid until ${paidThrough!.toLocaleDateString()}`
+          : paidThrough
+            ? "Expired"
+            : "Not paid"}
+      </span>
+      <Button variant="outline" size="sm" onClick={onPay}>
+        {live ? "Extend" : "Pay"}
+      </Button>
+    </div>
+  );
+}
+
+function RequestStatusCell({
+  request,
+  onChanged,
+}: {
+  request: MyRequestDto;
+  onChanged: () => void;
+}) {
+  const [pending, save] = useAsyncAction(async (status: RequestStatus) => {
+    const result = await setRequestStatus(request.id, status);
+    if (result.success) onChanged();
+    else if (result.error) toast.error(result.error);
+  });
+
+  return (
+    <Select
+      value={request.status}
+      onValueChange={(value) => value && !pending && save(value as RequestStatus)}
+    >
+      <SelectTrigger size="sm" className="w-32">
+        {pending ? <Loader2 className="size-3.5 animate-spin" /> : <SelectValue />}
+      </SelectTrigger>
+      <SelectContent>
+        {REQUEST_STATUSES.map((status) => (
+          <SelectItem key={status} value={status}>
+            {status.charAt(0) + status.slice(1).toLowerCase()}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }
 

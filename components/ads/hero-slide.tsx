@@ -14,7 +14,7 @@ export type SlideView = {
   isDarkText: boolean;
   ctaColor: AdColor;
   ctaLabel: string;
-  onCta?: () => void;
+  onCta?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 };
 
 // The exact visual the live hero carousel (components/ads/hero-banner.tsx)

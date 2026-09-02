@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { ShieldCheck, User, Megaphone } from "lucide-react";
+import { User, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SignInModal } from "@/components/auth/sign-in-modal";
 import { AccountSheet } from "@/components/auth/account-sheet";
 import { AdvertiseFormModal } from "@/components/ads/advertise-form-modal";
+import { InstallButton } from "@/components/install-button";
+import { ModeToggle } from "@/components/mode-toggle";
 
 export function Header() {
   const { data: session, status } = useSession();
@@ -25,10 +28,20 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 flex items-center justify-between gap-4 border-b bg-background/95 px-4 py-3 backdrop-blur">
-      <Link href="/" className="flex items-center gap-2 font-semibold">
-        <ShieldCheck className="text-primary" />
-        <span className="hidden sm:inline">Drive with confidence</span>
-      </Link>
+      <div className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2 font-semibold">
+          <Image
+            src="/logo.png"
+            alt="AutoRescue"
+            width={547}
+            height={487}
+            priority
+            className="h-9 w-auto rounded-md"
+          />
+          <span className="hidden sm:inline">Drive with confidence</span>
+        </Link>
+        <InstallButton />
+      </div>
 
       <nav className="flex items-center gap-1">
         <Button
@@ -38,6 +51,7 @@ export function Header() {
         >
           <Megaphone /> Advertise
         </Button>
+        <ModeToggle />
         <Button
           variant="ghost"
           onClick={handleAccountClick}

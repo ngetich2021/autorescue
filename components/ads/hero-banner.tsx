@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { haversineDistanceKm } from "@/lib/geo";
@@ -116,37 +116,37 @@ export function HeroBanner({
     return () => clearInterval(timer);
   }, [count]);
 
-  // Guards against double navigation from a fast double-click/tap — router.push
-  // doesn't resolve synchronously, so relying on React state alone (which only
-  // updates on the next render) isn't enough to block the second click. Must
-  // stay above the `count === 0` early return below (Rules of Hooks).
-  const navigatingRef = useRef(false);
-
   if (count === 0) return null;
 
-  function navigate(href: string) {
-    if (navigatingRef.current) return;
-    navigatingRef.current = true;
+  // Guards against double navigation from a fast double-click/tap —
+  // router.push doesn't resolve synchronously, so relying on React state
+  // (which only updates on the next render) isn't enough to block the
+  // second click. Disabling the clicked DOM node directly (via the event,
+  // not a ref) is synchronous and re-enabled on a timer.
+  function navigate(e: React.MouseEvent<HTMLButtonElement>, href: string) {
+    const button = e.currentTarget;
+    if (button.disabled) return;
+    button.disabled = true;
     router.push(href);
     setTimeout(() => {
-      navigatingRef.current = false;
+      button.disabled = false;
     }, 1000);
   }
 
-  function goFindNearbyShops(ad: BrandAdDto) {
+  function goFindNearbyShops(ad: BrandAdDto, e: React.MouseEvent<HTMLButtonElement>) {
     if (!location) {
       toast.error("Share your location first to find nearby shops.");
       return;
     }
-    navigate(`/shops?q=${encodeURIComponent(ad.productName)}`);
+    navigate(e, `/shops?q=${encodeURIComponent(ad.productName)}`);
   }
 
-  function goToShop(ad: ShopHeroAdDto) {
+  function goToShop(ad: ShopHeroAdDto, e: React.MouseEvent<HTMLButtonElement>) {
     if (!location) {
       toast.error("Share your location first to view this shop.");
       return;
     }
-    navigate(`/shops?shop=${ad.providerId}`);
+    navigate(e, `/shops?shop=${ad.providerId}`);
   }
 
   return (
@@ -175,7 +175,8 @@ export function HeroBanner({
                     isDarkText: slide.ad.textColor === "dark",
                     ctaColor: slide.ad.ctaColor,
                     ctaLabel: "Find nearby shops",
-                    onCta: () => goFindNearbyShops(slide.ad),
+                    onCta: (e: React.MouseEvent<HTMLButtonElement>) =>
+                      goFindNearbyShops(slide.ad, e),
                   }
                 : {
                     id: slide.ad.id,
@@ -186,7 +187,8 @@ export function HeroBanner({
                     isDarkText: false,
                     ctaColor: "blue" as AdColor,
                     ctaLabel: "View shop",
-                    onCta: () => goToShop(slide.ad),
+                    onCta: (e: React.MouseEvent<HTMLButtonElement>) =>
+                      goToShop(slide.ad, e),
                   };
 
             return (

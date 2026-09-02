@@ -83,12 +83,19 @@ model ProviderProfile {
   longitude      Float
   address        String?
   isActive       Boolean         @default(true)
+  // Unverified (the default) caps this shop's visibility to customers within
+  // 100m regardless of their search radius — see
+  // lib/queries.ts#withDistanceAndServiceTypes. Paying the KES 20 badge fee
+  // (app/actions/payment.ts#initiateBadgePayment) lifts that cap.
+  isVerified     Boolean         @default(false)
+  verifiedAt     DateTime?
   products       Product[]
   services       Service[]
   rescueRequests RescueRequest[]
   shopRoles      ShopRole[]
   members        ShopMember[]
   shopAds        ShopAd[]
+  payments       Payment[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
@@ -176,6 +183,10 @@ model BrandAd {
 // A shop's own promo for one of its products, shown inside that shop's
 // listing. Null radiusKm = universal (visible to anyone who opens the shop);
 // otherwise localised to that many km from the shop's own location.
+// Pricing (app/actions/payment.ts#initiatePromotionPayment): KES 25/day when
+// radiusKm is set ("local"), KES 50/day when null ("universal"). A promotion
+// only counts as live for visibility once expiresAt is in the future — see
+// lib/queries.ts.
 model ShopAd {
   id          String          @id
   providerId  String
@@ -187,8 +198,36 @@ model ShopAd {
   imageUrl    String?
   isActive    Boolean         @default(true)
   radiusKm    Float?
+  expiresAt   DateTime?
+  payments    Payment[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+
+  @@index([providerId])
+}
+
+// One M-Pesa Daraja STK Push transaction — a paid promotion (purpose
+// PROMOTION, tied to one ShopAd) or a shop's verification badge (purpose
+// BADGE, tied to the ProviderProfile only). Created PENDING when the STK
+// push is sent to the customer's phone, then flipped to COMPLETED/FAILED by
+// app/api/mpesa/callback/route.ts once Safaricom posts the result.
+model Payment {
+  id                 String          @id
+  providerId         String
+  provider           ProviderProfile @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  purpose            String
+  shopAdId           String?
+  shopAd             ShopAd?         @relation(fields: [shopAdId], references: [id], onDelete: SetNull)
+  days               Int?
+  amount             Int
+  phone              String
+  status             String          @default("PENDING")
+  checkoutRequestId  String?         @unique
+  merchantRequestId  String?
+  mpesaReceiptNumber String?
+  resultDesc         String?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   @@index([providerId])
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { Loader2, ArrowLeft } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -315,14 +316,17 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold">Admin</h1>
           <p className="text-sm text-muted-foreground">
             Platform-wide roles, staff, and moderation.
           </p>
         </div>
-        <Link href="/" className={buttonVariants({ variant: "ghost" })}>
+        <Link
+          href="/"
+          className={cn(buttonVariants({ variant: "ghost" }), "self-start")}
+        >
           <ArrowLeft /> Back to app
         </Link>
       </div>

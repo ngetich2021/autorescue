@@ -32,6 +32,7 @@ export type MyShopAdDto = {
   productId: string | null;
   isActive: boolean;
   radiusKm: number | null;
+  expiresAt: string | Date | null;
 };
 
 export function ShopAdFormModal({

@@ -40,6 +40,21 @@ export function ShopsSearchPanel({
   const radiusError = radiusRaw.trim() && "error" in radiusResult ? radiusResult.error : null;
   const radiusKm = "value" in radiusResult ? radiusResult.value : null;
 
+  // `q`/`shopId` only default radiusRaw on first mount (the useState
+  // initializer above). A promoted-item CTA that lands here via a
+  // client-side navigation (components/ads/hero-banner.tsx) doesn't remount
+  // this component — it just updates the search param — so without this,
+  // radius silently stays empty and the search never runs even though a
+  // product name is present. Adjusting state directly during render
+  // (guarded by comparing against the previous value) instead of an effect
+  // — see https://react.dev/reference/react/useState#storing-information-from-previous-renders.
+  const promotedKey = `${q}|${shopId ?? ""}`;
+  const [trackedPromotedKey, setTrackedPromotedKey] = useState(promotedKey);
+  if (promotedKey !== trackedPromotedKey) {
+    setTrackedPromotedKey(promotedKey);
+    if (q || shopId) setRadiusRaw("25");
+  }
+
   useEffect(() => {
     if (radiusKm == null) return;
 
@@ -90,12 +105,6 @@ export function ShopsSearchPanel({
 
   return (
     <div className="flex w-full flex-col gap-5">
-      {pinnedShop && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <ShopCard shop={pinnedShop} location={location} defaultOpen />
-        </div>
-      )}
-
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div className="grid gap-1.5">
           <Label htmlFor="shops-radius">Radius (km)</Label>
@@ -134,12 +143,18 @@ export function ShopsSearchPanel({
         </Select>
       </div>
 
+      {pinnedShop && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
+          <ShopCard shop={pinnedShop} location={location} defaultOpen />
+        </div>
+      )}
+
       {radiusKm == null ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
           Enter a radius to search nearby.
         </p>
       ) : loading ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-36 w-full" />
           ))}
@@ -151,7 +166,7 @@ export function ShopsSearchPanel({
           Try widening your search.
         </p>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
           {otherShops.map((shop) => (
             <ShopCard key={shop.id} shop={shop} location={location} />
           ))}

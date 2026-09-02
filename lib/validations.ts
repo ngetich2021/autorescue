@@ -226,3 +226,29 @@ export const inviteMemberSchema = z.object({
   email: z.email("Enter a valid email").trim(),
   roleId: z.string().min(1, "Select a role"),
 });
+
+// --- Payments (M-Pesa) ------------------------------------------------------
+
+export const PROMOTION_LOCAL_RATE_KES = 25;
+export const PROMOTION_UNIVERSAL_RATE_KES = 50;
+export const VERIFICATION_BADGE_FEE_KES = 20;
+// Unverified shops (ProviderProfile.isVerified === false, the default) are
+// only discoverable within this radius regardless of a customer's chosen
+// search radius — see lib/queries.ts#withDistanceAndServiceTypes.
+export const UNVERIFIED_VISIBILITY_RADIUS_KM = 0.1;
+
+const mpesaPhoneSchema = z
+  .string()
+  .trim()
+  .min(9, "Enter a valid M-Pesa phone number")
+  .max(15, "Enter a valid M-Pesa phone number");
+
+export const promotionPaymentSchema = z.object({
+  shopAdId: z.string().min(1),
+  days: z.coerce.number().int().min(1, "Enter at least 1 day").max(90, "Max 90 days"),
+  phone: mpesaPhoneSchema,
+});
+
+export const badgePaymentSchema = z.object({
+  phone: mpesaPhoneSchema,
+});
