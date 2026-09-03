@@ -149,7 +149,7 @@ export function HeroBanner({
       toast.error("Share your location first to find nearby shops.");
       return;
     }
-    navigate(e, `/shops?q=${encodeURIComponent(ad.productName)}`);
+    navigate(e, `/?q=${encodeURIComponent(ad.productName)}`);
   }
 
   function goToShop(ad: ShopHeroAdDto, e: React.MouseEvent<HTMLButtonElement>) {
@@ -157,7 +157,7 @@ export function HeroBanner({
       toast.error("Share your location first to view this shop.");
       return;
     }
-    navigate(e, `/shops?shop=${ad.providerId}`);
+    navigate(e, `/?shop=${ad.providerId}`);
   }
 
   return (

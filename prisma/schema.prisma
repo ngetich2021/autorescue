@@ -119,7 +119,10 @@ model Product {
   description String?
   price       Int
   imageUrl    String?
-  inStock     Boolean         @default(true)
+  // Real stock count, not just a yes/no — 0 means out of stock. Replaced the
+  // old `inStock` boolean so shop owners can show customers how many are
+  // left (see migration-13-product-quantity.sql).
+  quantity    Int             @default(0)
   shopAds     ShopAd[]
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt

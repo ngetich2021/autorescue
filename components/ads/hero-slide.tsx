@@ -43,6 +43,17 @@ export function HeroSlideVisual({
     </button>
   );
 
+  // A busy advertiser-supplied image can visually swallow the title/CTA
+  // overlay below, especially at the small carousel height on mobile — this
+  // badge is the one thing that has to stay legible regardless, so it's a
+  // solid high-contrast pill in its own corner rather than relying on
+  // whatever's underneath it.
+  const adBadge = (
+    <span className="absolute left-2 top-2 rounded bg-black/70 px-1.5 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-white">
+      Ad
+    </span>
+  );
+
   const overlay = (
     <div
       className={cn(
@@ -73,6 +84,7 @@ export function HeroSlideVisual({
         priority={priority}
       />
       {overlay}
+      {adBadge}
     </div>
   ) : (
     <div
@@ -81,6 +93,7 @@ export function HeroSlideVisual({
         view.bgGradient,
       )}
     >
+      {adBadge}
       <span className="text-lg font-semibold">{view.title}</span>
       {view.description && (
         <span className="line-clamp-2 text-sm text-white/85">{view.description}</span>

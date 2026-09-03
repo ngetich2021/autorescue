@@ -49,7 +49,13 @@ export default async function ShopManagePage({
     : [[], [], [], [], null];
 
   return (
+    // Keyed on the selected shop so switching shops (components/shops/shop-manage-dashboard.tsx's
+    // switcher navigates to a new ?shop=) remounts the dashboard instead of
+    // reusing the old instance — its products/services/ads/requests are only
+    // ever seeded from props via useState, which otherwise keeps the
+    // previous shop's data on screen after the URL/props change.
     <ShopManageDashboard
+      key={providerId ?? "none"}
       providerId={providerId}
       shops={shops}
       canManageRequests={canManageRequests}

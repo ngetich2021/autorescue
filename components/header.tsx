@@ -44,12 +44,8 @@ export function Header() {
       </div>
 
       <nav className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          className="hidden sm:inline-flex"
-          onClick={() => setAdvertiseOpen(true)}
-        >
-          <Megaphone /> Advertise
+        <Button variant="ghost" onClick={() => setAdvertiseOpen(true)}>
+          <Megaphone /> <span className="hidden sm:inline">Advertise</span>
         </Button>
         <ModeToggle />
         <Button

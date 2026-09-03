@@ -155,12 +155,12 @@ export function ShopManageDashboard({
     },
     {
       key: "status",
-      header: "Status",
+      header: "Stock",
       sortable: true,
-      sortValue: (row) => (row.inStock ? 1 : 0),
+      sortValue: (row) => row.quantity,
       render: (row) => (
-        <Badge variant={row.inStock ? "secondary" : "outline"}>
-          {row.inStock ? "In stock" : "Out of stock"}
+        <Badge variant={row.quantity > 0 ? "secondary" : "outline"}>
+          {row.quantity > 0 ? `${row.quantity} in stock` : "Out of stock"}
         </Badge>
       ),
     },
@@ -330,15 +330,20 @@ export function ShopManageDashboard({
       key: "location",
       header: "Location",
       render: (row) => (
-        <a
-          href={`https://www.google.com/maps?q=${row.latitude},${row.longitude}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 text-primary hover:underline"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <MapPin className="size-3.5" /> Open in Maps
-        </a>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-muted-foreground">
+            {row.latitude.toFixed(4)}, {row.longitude.toFixed(4)}
+          </span>
+          <a
+            href={`https://www.google.com/maps?q=${row.latitude},${row.longitude}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-primary hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <MapPin className="size-3.5" /> Open in Maps
+          </a>
+        </div>
       ),
     },
     {

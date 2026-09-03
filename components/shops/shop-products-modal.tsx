@@ -43,12 +43,12 @@ const productColumns: DataTableColumn<ProductRow>[] = [
   },
   {
     key: "status",
-    header: "Status",
+    header: "Stock",
     sortable: true,
-    sortValue: (row) => (row.inStock ? 1 : 0),
+    sortValue: (row) => row.quantity,
     render: (row) => (
-      <Badge variant={row.inStock ? "secondary" : "outline"}>
-        {row.inStock ? "In stock" : "Out of stock"}
+      <Badge variant={row.quantity > 0 ? "secondary" : "outline"}>
+        {row.quantity > 0 ? `${row.quantity} in stock` : "Out of stock"}
       </Badge>
     ),
   },
@@ -99,7 +99,7 @@ const STOCK_FILTER = {
     { value: "no", label: "Out of stock" },
   ],
   predicate: (row: ProductRow, value: string) =>
-    value === "yes" ? row.inStock : !row.inStock,
+    value === "yes" ? row.quantity > 0 : row.quantity === 0,
 };
 
 const AVAILABILITY_FILTER = {

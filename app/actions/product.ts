@@ -26,7 +26,7 @@ function parseProduct(formData: FormData) {
     name: formData.get("name"),
     description: formData.get("description"),
     price: formData.get("price"),
-    inStock: formData.get("inStock") === "on" ? "true" : "false",
+    quantity: formData.get("quantity"),
   });
 }
 

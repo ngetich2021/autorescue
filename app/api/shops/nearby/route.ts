@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { getNearbyProviders } from "@/lib/queries";
-import { coordsSchema, SERVICE_TYPES } from "@/lib/validations";
+import { coordsSchema, SERVICE_TYPES, SHOPS_SEARCH_MAX_RADIUS_KM } from "@/lib/validations";
 
 const querySchema = coordsSchema.extend({
-  radiusKm: z.coerce.number().min(1).max(200).default(15),
+  radiusKm: z.coerce.number().min(1).max(SHOPS_SEARCH_MAX_RADIUS_KM).default(15),
   q: z.string().trim().max(100).optional(),
   serviceType: z.enum(SERVICE_TYPES).optional(),
 });

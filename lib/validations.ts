@@ -130,6 +130,13 @@ export const providerProfileSchema = z.object({
   longitude: z.coerce.number().min(-180).max(180),
 });
 
+// The widest a nearby-shops search is ever allowed to reach — used both as
+// the API's hard cap (app/api/shops/nearby/route.ts) and as the effective
+// radius a text search runs at when the customer hasn't typed one in
+// (components/shops/shops-search-panel.tsx searches everywhere rather than
+// guessing a distance on their behalf).
+export const SHOPS_SEARCH_MAX_RADIUS_KM = 200;
+
 // Radius inputs across the app are empty by default (never pre-filled) and
 // their error messages must echo back exactly what the user typed.
 export function parseRadiusKm(
@@ -158,7 +165,7 @@ export const productSchema = z.object({
   name: z.string().trim().min(2, "Too short").max(100),
   description: z.string().trim().max(500).optional().or(z.literal("")),
   price: z.coerce.number().int().positive("Enter a valid price"),
-  inStock: z.coerce.boolean().optional().default(true),
+  quantity: z.coerce.number().int().min(0, "Quantity can't be negative"),
 });
 
 export const serviceSchema = z.object({

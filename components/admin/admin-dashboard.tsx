@@ -60,7 +60,7 @@ type ProductRow = ShopOwnedRef & {
   id: string;
   name: string;
   price: number;
-  inStock: boolean;
+  quantity: number;
   createdAt: string | Date;
 };
 type ServiceRow = ShopOwnedRef & {
@@ -345,12 +345,12 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     },
     {
       key: "status",
-      header: "Status",
+      header: "Stock",
       sortable: true,
-      sortValue: (row) => (row.inStock ? 1 : 0),
+      sortValue: (row) => row.quantity,
       render: (row) => (
-        <Badge variant={row.inStock ? "secondary" : "outline"}>
-          {row.inStock ? "In stock" : "Out of stock"}
+        <Badge variant={row.quantity > 0 ? "secondary" : "outline"}>
+          {row.quantity > 0 ? `${row.quantity} in stock` : "Out of stock"}
         </Badge>
       ),
     },
@@ -504,14 +504,19 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       header: "Location",
       stopRowClick: true,
       render: (row) => (
-        <a
-          href={`https://www.google.com/maps?q=${row.latitude},${row.longitude}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 text-primary hover:underline"
-        >
-          <MapPin className="size-3.5" /> Open in Maps
-        </a>
+        <div className="flex flex-col gap-0.5">
+          <span className="text-xs text-muted-foreground">
+            {row.latitude.toFixed(4)}, {row.longitude.toFixed(4)}
+          </span>
+          <a
+            href={`https://www.google.com/maps?q=${row.latitude},${row.longitude}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-primary hover:underline"
+          >
+            <MapPin className="size-3.5" /> Open in Maps
+          </a>
+        </div>
       ),
     },
     {

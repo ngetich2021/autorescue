@@ -22,7 +22,7 @@ export type MyProductDto = {
   description: string | null;
   price: number;
   imageUrl: string | null;
-  inStock: boolean;
+  quantity: number;
 };
 
 export function ProductFormModal({
@@ -108,21 +108,28 @@ export function ProductFormModal({
             )}
           </div>
           <div className="grid gap-1.5">
+            <Label htmlFor="quantity">Quantity in stock</Label>
+            <Input
+              id="quantity"
+              name="quantity"
+              type="number"
+              min={0}
+              defaultValue={product?.quantity ?? 0}
+              required
+            />
+            {state.fieldErrors?.quantity && (
+              <p className="text-xs text-destructive">
+                {state.fieldErrors.quantity[0]}
+              </p>
+            )}
+          </div>
+          <div className="grid gap-1.5">
             <Label htmlFor="image">
               Photo{" "}
               {product?.imageUrl ? "(leave empty to keep current)" : "(optional)"}
             </Label>
             <Input id="image" name="image" type="file" accept="image/*" />
           </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="inStock"
-              defaultChecked={product?.inStock ?? true}
-              className="size-4"
-            />
-            In stock
-          </label>
           <DialogFooter>
             <Button type="submit" disabled={pending}>
               {pending ? "Saving…" : "Save"}

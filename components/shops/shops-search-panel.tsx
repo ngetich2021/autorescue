@@ -13,14 +13,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ShopCard, type ShopDto } from "./shop-card";
-import { SERVICE_TYPES, SERVICE_TYPE_LABELS, parseRadiusKm } from "@/lib/validations";
+import {
+  SERVICE_TYPES,
+  SERVICE_TYPE_LABELS,
+  SHOPS_SEARCH_MAX_RADIUS_KM,
+  parseRadiusKm,
+} from "@/lib/validations";
 
 // The one search panel for both rescue and shop needs — a provider account
 // is both at once, so there's a single result list. A shop-ad or brand-ad
 // CTA (components/ads/hero-banner.tsx) lands here via ?q=<product name> or
-// ?shop=<providerId>, so this also needs a sensible default radius (instead
-// of requiring the customer to type one first) and a way to pin/auto-open
-// the specific provider that was promoted.
+// ?shop=<providerId>, same as the search box above (components/home/nearby-home.tsx).
 export function ShopsSearchPanel({
   location,
 }: {
@@ -30,7 +33,9 @@ export function ShopsSearchPanel({
   const q = searchParams.get("q") ?? "";
   const shopId = searchParams.get("shop");
 
-  const [radiusRaw, setRadiusRaw] = useState(() => (q ? "25" : ""));
+  // The radius field itself never gets a value the customer didn't type —
+  // it stays blank until they narrow the search themselves.
+  const [radiusRaw, setRadiusRaw] = useState("");
   const [serviceType, setServiceType] = useState<string>("ALL");
   const [shops, setShops] = useState<ShopDto[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -38,22 +43,12 @@ export function ShopsSearchPanel({
 
   const radiusResult = parseRadiusKm(radiusRaw);
   const radiusError = radiusRaw.trim() && "error" in radiusResult ? radiusResult.error : null;
-  const radiusKm = "value" in radiusResult ? radiusResult.value : null;
-
-  // `q`/`shopId` only default radiusRaw on first mount (the useState
-  // initializer above). A promoted-item CTA that lands here via a
-  // client-side navigation (components/ads/hero-banner.tsx) doesn't remount
-  // this component — it just updates the search param — so without this,
-  // radius silently stays empty and the search never runs even though a
-  // product name is present. Adjusting state directly during render
-  // (guarded by comparing against the previous value) instead of an effect
-  // — see https://react.dev/reference/react/useState#storing-information-from-previous-renders.
-  const promotedKey = `${q}|${shopId ?? ""}`;
-  const [trackedPromotedKey, setTrackedPromotedKey] = useState(promotedKey);
-  if (promotedKey !== trackedPromotedKey) {
-    setTrackedPromotedKey(promotedKey);
-    if (q || shopId) setRadiusRaw("25");
-  }
+  const typedRadiusKm = "value" in radiusResult ? radiusResult.value : null;
+  // A text/promoted search shouldn't need the customer to also guess a
+  // distance — search as widely as the API allows and let them narrow it
+  // with an explicit radius if they want to. Plain "browse what's nearby"
+  // (no query, no radius typed) still asks for one.
+  const radiusKm = typedRadiusKm ?? ((q || shopId) ? SHOPS_SEARCH_MAX_RADIUS_KM : null);
 
   useEffect(() => {
     if (radiusKm == null) return;
@@ -122,6 +117,8 @@ export function ShopsSearchPanel({
           {q && (
             <p className="text-xs text-muted-foreground">
               Showing results with &ldquo;{q}&rdquo;
+              {typedRadiusKm == null &&
+                " — searching everywhere. Enter a radius to narrow it."}
             </p>
           )}
         </div>
@@ -144,7 +141,7 @@ export function ShopsSearchPanel({
       </div>
 
       {pinnedShop && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ShopCard shop={pinnedShop} location={location} defaultOpen />
         </div>
       )}
@@ -154,19 +151,20 @@ export function ShopsSearchPanel({
           Enter a radius to search nearby.
         </p>
       ) : loading ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-36 w-full" />
           ))}
         </div>
       ) : otherShops.length === 0 && !pinnedShop ? (
         <p className="py-10 text-center text-sm text-muted-foreground">
-          {q ? `"${q}" is not` : "Nothing is"} available within your
-          coordinates{radiusKm > 0 ? ` or the ${radiusKm} km radius` : ""}.
-          Try widening your search.
+          {q ? `"${q}" is not` : "Nothing is"} available
+          {typedRadiusKm != null
+            ? ` within your coordinates or the ${typedRadiusKm} km radius. Try widening your search.`
+            : " anywhere yet. Try a different search term."}
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {otherShops.map((shop) => (
             <ShopCard key={shop.id} shop={shop} location={location} />
           ))}

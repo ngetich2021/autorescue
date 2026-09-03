@@ -5,6 +5,7 @@ import {
   toAdColor,
   toAdTextColor,
   UNVERIFIED_VISIBILITY_RADIUS_KM,
+  SERVICE_TYPE_LABELS,
   type ServiceType,
 } from "@/lib/validations";
 
@@ -90,14 +91,67 @@ function toShopDto<
   return { ...rest, featuredAd };
 }
 
-function matchesProductQuery(
-  shop: { businessName: string; products: { name: string }[] },
+// Words filtered out of a search query before matching, so a filler word
+// doesn't widen results to near-everything (falls back to the unfiltered
+// tokens if a query is made up of nothing else — see matchesQuery below).
+const SEARCH_STOPWORDS = new Set([
+  "a", "an", "the", "for", "and", "or", "in", "at", "of", "to", "with", "near", "me",
+]);
+
+// A stray typo like a trailing comma ("brakes," instead of "brakes" — an
+// advertiser fat-fingering a promoted product name) otherwise breaks every
+// match: "brakes," is never a substring of "brakes" followed by a space, so
+// the ad's own "Find nearby shops" CTA would return nothing for a shop that
+// plainly stocks it. Stripping punctuation before comparing, on both the
+// query and everything it's matched against, makes that class of typo
+// harmless instead of a silent zero-results bug.
+function normalizeSearchText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+    .trim();
+}
+
+// A customer's search text ("mechanic for motorcycle") is a phrase, not a
+// literal substring anyone typed into a shop's listing — matching the whole
+// string against just the business name/product names (the old behavior)
+// missed shops that plainly offer what was asked for, like a shop named
+// "Busia Spareparts and Mechanics" not matching "mechanic for motorcycle"
+// because that exact phrase never appears anywhere. Splitting into words and
+// matching any one of them against every searchable field — business name,
+// service category, itemized services, and products — covers what the
+// customer is actually asking for.
+function matchesQuery(
+  shop: {
+    businessName: string;
+    description: string | null;
+    serviceTypes: string;
+    products: { name: string; description: string | null }[];
+    services: { name: string; description: string | null }[];
+  },
   q: string,
 ) {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return true;
-  if (shop.businessName.toLowerCase().includes(needle)) return true;
-  return shop.products.some((p) => p.name.toLowerCase().includes(needle));
+  const allTokens = normalizeSearchText(q).split(/\s+/).filter(Boolean);
+  if (allTokens.length === 0) return true;
+  const tokens = allTokens.filter(
+    (token) => token.length > 1 && !SEARCH_STOPWORDS.has(token),
+  );
+  const effectiveTokens = tokens.length > 0 ? tokens : allTokens;
+
+  const categoryLabels = parseServiceTypes(shop.serviceTypes).map(
+    (type) => SERVICE_TYPE_LABELS[type as ServiceType] ?? type,
+  );
+  const haystack = normalizeSearchText(
+    [
+      shop.businessName,
+      shop.description ?? "",
+      ...categoryLabels,
+      ...shop.products.flatMap((p) => [p.name, p.description ?? ""]),
+      ...shop.services.flatMap((s) => [s.name, s.description ?? ""]),
+    ].join(" "),
+  );
+
+  return effectiveTokens.some((token) => haystack.includes(token));
 }
 
 // Every active provider within range — a rescuer, a shop, or (usually) both
@@ -117,7 +171,7 @@ export async function getNearbyProviders(params: {
   });
 
   const matching = params.q
-    ? providers.filter((shop) => matchesProductQuery(shop, params.q!))
+    ? providers.filter((shop) => matchesQuery(shop, params.q!))
     : providers;
 
   return withDistanceAndServiceTypes(matching, params).map(toShopDto);
