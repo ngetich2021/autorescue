@@ -18,6 +18,7 @@ import {
   SERVICE_TYPE_LABELS,
   SHOPS_SEARCH_MAX_RADIUS_KM,
   parseRadiusKm,
+  type ServiceType,
 } from "@/lib/validations";
 
 // The one search panel for both rescue and shop needs — a provider account
@@ -127,7 +128,11 @@ export function ShopsSearchPanel({
           onValueChange={(value) => setServiceType(value ?? "ALL")}
         >
           <SelectTrigger className="w-full sm:w-48">
-            <SelectValue placeholder="All services" />
+            <SelectValue placeholder="All services">
+              {(value: string) =>
+                value === "ALL" ? "All services" : (SERVICE_TYPE_LABELS[value as ServiceType] ?? value)
+              }
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">All services</SelectItem>

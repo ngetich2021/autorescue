@@ -359,7 +359,7 @@ export function getAllServicesForAdmin() {
 export function getAllShopAdsForAdmin() {
   return db.shopAd.findMany({
     orderBy: { createdAt: "desc" },
-    include: ADMIN_SHOP_REF,
+    include: { ...ADMIN_SHOP_REF, product: { select: { name: true } } },
   });
 }
 

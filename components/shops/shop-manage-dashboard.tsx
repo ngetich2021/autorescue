@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DataTable, type DataTableColumn } from "@/components/admin/data-table";
+import { PhoneReveal } from "@/components/phone-reveal";
 import { ProductFormModal, type MyProductDto } from "./product-form-modal";
 import { ServiceFormModal, type MyServiceDto } from "./service-form-modal";
 import { ShopAdFormModal, type MyShopAdDto } from "./shop-ad-form-modal";
@@ -309,11 +310,12 @@ export function ShopManageDashboard({
       key: "customer",
       header: "Customer",
       sortable: true,
+      stopRowClick: true,
       sortValue: (row) => row.customerName.toLowerCase(),
       render: (row) => (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-0.5">
           <span className="font-medium">{row.customerName}</span>
-          <span className="text-xs text-muted-foreground">{row.customerPhone}</span>
+          <PhoneReveal phone={row.customerPhone} className="text-xs" />
         </div>
       ),
     },
@@ -386,7 +388,14 @@ export function ShopManageDashboard({
             >
               <SelectTrigger size="sm" className="w-44">
                 <Store className="size-3.5" />
-                <SelectValue placeholder="Select shop" />
+                <SelectValue placeholder="Select shop">
+                  {(value: string) => {
+                    const shop = shops.find((s) => s.id === value);
+                    return shop
+                      ? `${shop.businessName}${shop.role === "member" ? " (team)" : ""}`
+                      : value;
+                  }}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {shops.map((shop) => (
@@ -680,7 +689,13 @@ function RequestStatusCell({
       onValueChange={(value) => value && !pending && save(value as RequestStatus)}
     >
       <SelectTrigger size="sm" className="w-32">
-        {pending ? <Loader2 className="size-3.5 animate-spin" /> : <SelectValue />}
+        {pending ? (
+          <Loader2 className="size-3.5 animate-spin" />
+        ) : (
+          <SelectValue>
+            {(value: string) => value.charAt(0) + value.slice(1).toLowerCase()}
+          </SelectValue>
+        )}
       </SelectTrigger>
       <SelectContent>
         {REQUEST_STATUSES.map((status) => (

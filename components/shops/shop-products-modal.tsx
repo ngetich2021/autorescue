@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { DataTable, type DataTableColumn } from "@/components/admin/data-table";
+import { PhoneReveal } from "@/components/phone-reveal";
 import type { ShopDto } from "./shop-card";
 
 type ProductRow = ShopDto["products"][number];
@@ -132,9 +133,12 @@ export function ShopProductsModal({
               <BadgeCheck className="size-4 shrink-0 fill-blue-500 text-white" />
             )}
           </DialogTitle>
-          <DialogDescription>
-            {shop.phone} · {shop.email}
-            {shop.address ? ` · ${shop.address}` : ""}
+          <DialogDescription className="flex flex-wrap items-center gap-1.5">
+            <PhoneReveal phone={shop.phone} />
+            <span>
+              · {shop.email}
+              {shop.address ? ` · ${shop.address}` : ""}
+            </span>
           </DialogDescription>
         </DialogHeader>
         {shop.featuredAd && (

@@ -134,7 +134,9 @@ export function AdDetailModal({
               onValueChange={(value) => value && setTextColor(value as AdTextColor)}
             >
               <SelectTrigger size="sm" className="w-40">
-                <SelectValue />
+                <SelectValue>
+                  {(value: AdTextColor) => AD_TEXT_COLOR_LABELS[value] ?? value}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {AD_TEXT_COLORS.map((color) => (
@@ -149,7 +151,9 @@ export function AdDetailModal({
               onValueChange={(value) => value && setCtaColor(value as AdColor)}
             >
               <SelectTrigger size="sm" className="w-28">
-                <SelectValue />
+                <SelectValue>
+                  {(value: AdColor) => AD_COLOR_LABELS[value] ?? value}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {AD_COLORS.map((color) => (

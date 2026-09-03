@@ -135,7 +135,9 @@ function MemberRow({
           disabled={busy}
         >
           <SelectTrigger size="sm">
-            <SelectValue />
+            <SelectValue>
+              {(value: string) => roles.find((r) => r.id === value)?.name ?? value}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {roles.map((role) => (

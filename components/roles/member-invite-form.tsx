@@ -74,7 +74,9 @@ export function MemberInviteForm({
           onValueChange={(value) => setRoleId(value ?? roleId)}
         >
           <SelectTrigger className="w-full sm:w-40">
-            <SelectValue />
+            <SelectValue>
+              {(value: string) => roles.find((r) => r.id === value)?.name ?? value}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {roles.map((role) => (

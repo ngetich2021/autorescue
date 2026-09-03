@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, Store, Phone, Mail, Wrench, BadgeCheck } from "lucide-react";
+import { MapPin, Store, Mail, Wrench, BadgeCheck } from "lucide-react";
+import { PhoneReveal } from "@/components/phone-reveal";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   Dialog,
@@ -148,10 +149,7 @@ export function ShopCard({
                   .join(" · ")}
               </span>
             )}
-            <span className="flex items-center gap-1.5">
-              <Phone className="size-3.5 shrink-0" />
-              {shop.phone}
-            </span>
+            <PhoneReveal phone={shop.phone} />
             <span className="flex items-center gap-1.5">
               <Mail className="size-3.5 shrink-0" />
               {shop.email}

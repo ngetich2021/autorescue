@@ -13,11 +13,33 @@ import { MemberList, type MemberDto } from "@/components/roles/member-list";
 import { MemberInviteForm } from "@/components/roles/member-invite-form";
 import type { RoleDto } from "@/components/roles/role-form-modal";
 import { DataTable, type DataTableColumn } from "@/components/admin/data-table";
+import { PhoneReveal } from "@/components/phone-reveal";
 import {
   ProviderDetailModal,
   type ProviderDetailRow,
 } from "@/components/admin/provider-detail-modal";
 import { AdDetailModal, type AdDetailRow } from "@/components/admin/ad-detail-modal";
+import {
+  ProductDetailModal,
+  type ProductDetailRow,
+} from "@/components/admin/product-detail-modal";
+import {
+  ServiceDetailModal,
+  type ServiceDetailRow,
+} from "@/components/admin/service-detail-modal";
+import {
+  ShopAdDetailModal,
+  type ShopAdDetailRow,
+} from "@/components/admin/shop-ad-detail-modal";
+import {
+  PaymentDetailModal,
+  type PaymentDetailRow,
+} from "@/components/admin/payment-detail-modal";
+import {
+  RescueRequestDetailModal,
+  type RescueRequestDetailRow,
+} from "@/components/admin/rescue-request-detail-modal";
+import { UserDetailModal, type UserDetailRow } from "@/components/admin/user-detail-modal";
 import {
   PLATFORM_PERMISSIONS,
   PLATFORM_PERMISSION_LABELS,
@@ -48,66 +70,18 @@ const PERMISSION_CATALOG = PLATFORM_PERMISSIONS.map((key) => ({
 // field the modal shows on hand already (no second fetch).
 type ProviderRow = ProviderDetailRow;
 type AdRow = AdDetailRow;
+type ProductRow = ProductDetailRow;
+type ServiceRow = ServiceDetailRow;
+type ShopAdRow = ShopAdDetailRow;
+type PaymentRow = PaymentDetailRow;
+type RescueRequestRow = RescueRequestDetailRow;
+type UserRow = UserDetailRow;
 
-// Shop-owned rows (products/services/promotions) all carry the same
-// "who owns this" reference, so clicking any of them can trace straight back
-// to the owning shop's own detail modal — no separate detail view needed.
+// Shared shape for the "Shop" column across product/service/promotion/
+// payment/request tables — every one of those rows carries it.
 type ShopOwnedRef = {
   providerId: string;
   provider: { businessName: string; user: { name: string | null; email: string | null } };
-};
-type ProductRow = ShopOwnedRef & {
-  id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  createdAt: string | Date;
-};
-type ServiceRow = ShopOwnedRef & {
-  id: string;
-  name: string;
-  price: number;
-  isAvailable: boolean;
-  createdAt: string | Date;
-};
-type ShopAdRow = ShopOwnedRef & {
-  id: string;
-  title: string;
-  radiusKm: number | null;
-  isActive: boolean;
-  createdAt: string | Date;
-};
-type PaymentRow = ShopOwnedRef & {
-  id: string;
-  purpose: string;
-  amount: number;
-  phone: string;
-  status: string;
-  days: number | null;
-  mpesaReceiptNumber: string | null;
-  resultDesc: string | null;
-  createdAt: string | Date;
-};
-type RescueRequestRow = ShopOwnedRef & {
-  id: string;
-  customerName: string;
-  customerPhone: string;
-  serviceType: string;
-  status: string;
-  latitude: number;
-  longitude: number;
-  createdAt: string | Date;
-};
-
-type UserRow = {
-  id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  createdAt: string | Date;
-  providerProfiles: { businessName: string }[];
-  platformMember: { role: { name: string } } | null;
-  shopMemberships: { role: { name: string }; provider: { businessName: string } }[];
 };
 
 const PAYMENT_PURPOSE_LABELS: Record<string, string> = {
@@ -159,6 +133,12 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   const [users, setUsers] = useState<UserRow[]>(initialData.users);
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [selectedAdId, setSelectedAdId] = useState<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [selectedShopAdId, setSelectedShopAdId] = useState<string | null>(null);
+  const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
+  const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const loadingRef = useRef(false);
   const warnedRef = useRef(false);
@@ -213,6 +193,12 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   // reflected there the instant `load()` finishes.
   const selectedProvider = providers.find((p) => p.id === selectedProviderId) ?? null;
   const selectedAd = brandAds.find((a) => a.id === selectedAdId) ?? null;
+  const selectedProduct = products.find((p) => p.id === selectedProductId) ?? null;
+  const selectedService = services.find((s) => s.id === selectedServiceId) ?? null;
+  const selectedShopAd = shopAds.find((a) => a.id === selectedShopAdId) ?? null;
+  const selectedPayment = payments.find((p) => p.id === selectedPaymentId) ?? null;
+  const selectedRequest = rescueRequests.find((r) => r.id === selectedRequestId) ?? null;
+  const selectedUser = users.find((u) => u.id === selectedUserId) ?? null;
 
   const providerColumns: DataTableColumn<ProviderRow>[] = [
     {
@@ -447,7 +433,12 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       sortValue: (row) => row.amount,
       render: (row) => `KES ${row.amount.toLocaleString()}`,
     },
-    { key: "phone", header: "Phone", render: (row) => row.phone },
+    {
+      key: "phone",
+      header: "Phone",
+      stopRowClick: true,
+      render: (row) => <PhoneReveal phone={row.phone} className="text-xs" />,
+    },
     {
       key: "receipt",
       header: "Receipt",
@@ -481,11 +472,12 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       key: "customer",
       header: "Customer",
       sortable: true,
+      stopRowClick: true,
       sortValue: (row) => row.customerName.toLowerCase(),
       render: (row) => (
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-0.5">
           <span className="font-medium">{row.customerName}</span>
-          <span className="text-xs text-muted-foreground">{row.customerPhone}</span>
+          <PhoneReveal phone={row.customerPhone} className="text-xs" />
         </div>
       ),
     },
@@ -555,7 +547,8 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     {
       key: "phone",
       header: "Phone",
-      render: (row) => row.phone ?? "—",
+      stopRowClick: true,
+      render: (row) => (row.phone ? <PhoneReveal phone={row.phone} /> : "—"),
     },
     {
       key: "roles",
@@ -667,6 +660,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             searchValue={(row) =>
               `${row.name ?? ""} ${row.email ?? ""} ${row.phone ?? ""} ${row.providerProfiles.map((p) => p.businessName).join(" ")}`
             }
+            onRowClick={(row) => setSelectedUserId(row.id)}
           />
         </TabsContent>
 
@@ -710,7 +704,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             searchPlaceholder="Search products…"
             searchValue={(row) => `${row.name} ${row.provider.businessName}`}
             emptyMessage="No products yet."
-            onRowClick={(row) => setSelectedProviderId(row.providerId)}
+            onRowClick={(row) => setSelectedProductId(row.id)}
           />
         </TabsContent>
 
@@ -721,7 +715,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             searchPlaceholder="Search services…"
             searchValue={(row) => `${row.name} ${row.provider.businessName}`}
             emptyMessage="No services yet."
-            onRowClick={(row) => setSelectedProviderId(row.providerId)}
+            onRowClick={(row) => setSelectedServiceId(row.id)}
           />
         </TabsContent>
 
@@ -744,7 +738,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               },
             ]}
             emptyMessage="No promotions yet."
-            onRowClick={(row) => setSelectedProviderId(row.providerId)}
+            onRowClick={(row) => setSelectedShopAdId(row.id)}
           />
         </TabsContent>
 
@@ -803,7 +797,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               },
             ]}
             emptyMessage="No payments yet."
-            onRowClick={(row) => setSelectedProviderId(row.providerId)}
+            onRowClick={(row) => setSelectedPaymentId(row.id)}
           />
         </TabsContent>
 
@@ -827,7 +821,7 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
               },
             ]}
             emptyMessage="No rescue requests yet."
-            onRowClick={(row) => setSelectedProviderId(row.providerId)}
+            onRowClick={(row) => setSelectedRequestId(row.id)}
           />
         </TabsContent>
       </Tabs>
@@ -843,6 +837,40 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
         open={selectedAdId !== null}
         onOpenChange={(open) => !open && setSelectedAdId(null)}
         onChanged={load}
+      />
+      <ProductDetailModal
+        product={selectedProduct}
+        open={selectedProductId !== null}
+        onOpenChange={(open) => !open && setSelectedProductId(null)}
+        onChanged={load}
+      />
+      <ServiceDetailModal
+        service={selectedService}
+        open={selectedServiceId !== null}
+        onOpenChange={(open) => !open && setSelectedServiceId(null)}
+        onChanged={load}
+      />
+      <ShopAdDetailModal
+        ad={selectedShopAd}
+        open={selectedShopAdId !== null}
+        onOpenChange={(open) => !open && setSelectedShopAdId(null)}
+        onChanged={load}
+      />
+      <PaymentDetailModal
+        payment={selectedPayment}
+        open={selectedPaymentId !== null}
+        onOpenChange={(open) => !open && setSelectedPaymentId(null)}
+      />
+      <RescueRequestDetailModal
+        request={selectedRequest}
+        open={selectedRequestId !== null}
+        onOpenChange={(open) => !open && setSelectedRequestId(null)}
+        onChanged={load}
+      />
+      <UserDetailModal
+        user={selectedUser}
+        open={selectedUserId !== null}
+        onOpenChange={(open) => !open && setSelectedUserId(null)}
       />
     </div>
   );

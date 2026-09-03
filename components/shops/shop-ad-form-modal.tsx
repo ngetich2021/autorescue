@@ -119,7 +119,11 @@ export function ShopAdFormModal({
                 onValueChange={(value) => setProductId(value ?? "")}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="No linked product" />
+                  <SelectValue placeholder="No linked product">
+                    {(value: string) =>
+                      products.find((p) => p.id === value)?.name ?? value
+                    }
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {products.map((product) => (

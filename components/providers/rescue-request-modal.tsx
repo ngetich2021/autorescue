@@ -80,7 +80,9 @@ export function RescueRequestModal({
                 onValueChange={(value) => setServiceType(value ?? serviceType)}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue>
+                    {(value: string) => SERVICE_TYPE_LABELS[value as ServiceType] ?? value}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {provider.serviceTypes.map((type) => (

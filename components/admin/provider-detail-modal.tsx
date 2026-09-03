@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { DetailField } from "./detail-field";
+import { PhoneReveal } from "@/components/phone-reveal";
 import { SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/validations";
 
 export type ProviderDetailRow = {
@@ -70,7 +71,9 @@ export function ProviderDetailModal({
             </Badge>
           </DetailField>
           <DetailField label="Owner email">{provider.user.email ?? "—"}</DetailField>
-          <DetailField label="Phone">{provider.phone}</DetailField>
+          <DetailField label="Phone">
+            <PhoneReveal phone={provider.phone} />
+          </DetailField>
           <DetailField label="Email">{provider.email}</DetailField>
           <DetailField label="Services" full>
             <div className="flex flex-wrap gap-1">

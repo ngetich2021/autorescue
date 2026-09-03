@@ -140,7 +140,16 @@ export function DataTable<T extends { id: string }>({
             }
           >
             <SelectTrigger size="sm" className="w-40">
-              <SelectValue />
+              {/* Base UI's <Select.Value> renders the raw value, not the
+                  matching item's label, unless told how to look one up —
+                  see https://base-ui.com/react/components/select#value */}
+              <SelectValue>
+                {(value: string) =>
+                  value === "ALL" || !value
+                    ? `${filter.label}: All`
+                    : (filter.options.find((o) => o.value === value)?.label ?? value)
+                }
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">{filter.label}: All</SelectItem>
