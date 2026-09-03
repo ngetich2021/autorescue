@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MapPin, Store, Phone, Mail, Wrench } from "lucide-react";
+import { MapPin, Store, Phone, Mail, Wrench, BadgeCheck } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -19,6 +19,7 @@ import { RescueRequestModal } from "@/components/providers/rescue-request-modal"
 export type ShopDto = {
   id: string;
   businessName: string;
+  isVerified: boolean;
   serviceTypes: string[];
   phone: string;
   email: string;
@@ -72,7 +73,12 @@ export function ShopCard({
     <Card>
       <CardHeader>
         <div className="flex items-start justify-between gap-2">
-          <CardTitle>{shop.businessName}</CardTitle>
+          <CardTitle className="flex items-center gap-1">
+            {shop.businessName}
+            {shop.isVerified && (
+              <BadgeCheck className="size-4 shrink-0 fill-blue-500 text-white" />
+            )}
+          </CardTitle>
           <div className="flex flex-wrap justify-end gap-1">
             {shop.serviceTypes.map((type) => (
               <Badge key={type} variant="secondary">

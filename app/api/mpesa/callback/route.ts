@@ -46,11 +46,24 @@ export async function POST(request: Request) {
           data: { expiresAt, isActive: true },
         });
       }
-    } else if (payment.purpose === "BADGE") {
-      await db.providerProfile.update({
+    } else if (payment.purpose === "BADGE" && payment.days) {
+      const provider = await db.providerProfile.findUnique({
         where: { id: payment.providerId },
-        data: { isVerified: true, verifiedAt: new Date() },
       });
+      if (provider) {
+        // Stacks onto whatever time is left, same as a ShopAd promotion
+        // (see the PROMOTION branch above) — paying again before expiry
+        // extends verification instead of wasting the remaining paid days.
+        const base =
+          provider.verifiedUntil && provider.verifiedUntil > new Date()
+            ? provider.verifiedUntil
+            : new Date();
+        const verifiedUntil = new Date(base.getTime() + payment.days * 24 * 60 * 60 * 1000);
+        await db.providerProfile.update({
+          where: { id: provider.id },
+          data: { isVerified: true, verifiedAt: new Date(), verifiedUntil },
+        });
+      }
     }
   }
 

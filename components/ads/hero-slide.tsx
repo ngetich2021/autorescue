@@ -68,6 +68,7 @@ export function HeroSlideVisual({
         src={view.imageUrl}
         alt={view.title}
         fill
+        sizes="100vw"
         className="object-cover"
         priority={priority}
       />

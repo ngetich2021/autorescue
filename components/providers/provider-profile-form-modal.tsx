@@ -14,10 +14,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { upsertProviderProfile } from "@/app/actions/provider";
-import { initialActionState } from "@/app/actions/types";
+import { Loader2, Trash2 } from "lucide-react";
+import {
+  upsertProviderProfile,
+  deleteProviderProfile,
+  type ProviderActionState,
+} from "@/app/actions/provider";
 import { SERVICE_TYPES, SERVICE_TYPE_LABELS } from "@/lib/validations";
 import { LocationTrigger } from "@/components/location/location-trigger";
+import { useAsyncAction } from "@/lib/use-async-action";
+
+const initialState: ProviderActionState = {};
 
 type ProviderProfileDto = {
   businessName: string;
@@ -33,14 +40,37 @@ type ProviderProfileDto = {
 export function ProviderProfileFormModal({
   open,
   onOpenChange,
+  providerId,
+  onSaved,
+  onDeleted,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Non-null edits that specific shop; null creates a brand-new one.
+  providerId: string | null;
+  onSaved: (providerId: string) => void;
+  onDeleted: (providerId: string) => void;
 }) {
-  const [state, formAction, pending] = useActionState(
-    upsertProviderProfile,
-    initialActionState,
-  );
+  const action = upsertProviderProfile.bind(null, providerId);
+  const [state, formAction, pending] = useActionState(action, initialState);
+  const [deleting, handleDelete] = useAsyncAction(async () => {
+    if (
+      !providerId ||
+      !confirm(
+        "Delete this shop? Customers won't be able to find it, and its products, services, and promotions go with it.",
+      )
+    ) {
+      return;
+    }
+    const result = await deleteProviderProfile(providerId);
+    if (result.success) {
+      toast.success("Shop deleted.");
+      onOpenChange(false);
+      onDeleted(providerId);
+    } else if (result.error) {
+      toast.error(result.error);
+    }
+  });
   const [loading, startLoading] = useTransition();
   const [profile, setProfile] = useState<ProviderProfileDto>(null);
   const [accountEmail, setAccountEmail] = useState("");
@@ -55,7 +85,15 @@ export function ProviderProfileFormModal({
   useEffect(() => {
     if (!open) return;
     startLoading(async () => {
-      const res = await fetch("/api/me/provider");
+      if (!providerId) {
+        // Creating a new shop — always starts blank, never prefilled from
+        // whichever shop happens to be selected elsewhere.
+        setProfile(null);
+        setServiceTypes(["MECHANIC"]);
+        setPosition(null);
+        return;
+      }
+      const res = await fetch(`/api/me/provider?shop=${providerId}`);
       const data = await res.json();
       setProfile(data.profile ?? null);
       setAccountEmail(data.accountEmail ?? "");
@@ -65,17 +103,15 @@ export function ProviderProfileFormModal({
           lat: data.profile.latitude,
           lng: data.profile.longitude,
         });
-      } else {
-        setServiceTypes(["MECHANIC"]);
-        setPosition(null);
       }
     });
-  }, [open]);
+  }, [open, providerId]);
 
   useEffect(() => {
-    if (state.success) {
+    if (state.success && state.providerId) {
       toast.success("Your listing is live.");
       onOpenChange(false);
+      onSaved(state.providerId);
     }
     if (state.error) toast.error(state.error);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -92,7 +128,7 @@ export function ProviderProfileFormModal({
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
-            {profile ? "Edit your listing" : "Post your service"}
+            {providerId ? "Edit your listing" : "Post your service"}
           </DialogTitle>
           <DialogDescription>
             This is what stranded drivers see when they search nearby.
@@ -210,8 +246,19 @@ export function ProviderProfileFormModal({
               />
             </div>
 
-            <DialogFooter>
-              <Button type="submit" disabled={pending || !position}>
+            <DialogFooter className="sm:justify-between">
+              {providerId && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={pending || deleting}
+                  onClick={() => handleDelete()}
+                >
+                  {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
+                  Delete shop
+                </Button>
+              )}
+              <Button type="submit" disabled={pending || deleting || !position}>
                 {pending ? "Saving…" : "Save listing"}
               </Button>
             </DialogFooter>

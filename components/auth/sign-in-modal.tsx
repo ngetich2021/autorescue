@@ -1,6 +1,7 @@
 "use client";
 
 import { signIn } from "next-auth/react";
+import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -19,7 +20,17 @@ export function SignInModal({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [signingIn, doSignIn] = useAsyncAction(() => signIn("google"));
+  // signIn() makes a few sequential round-trips (providers, csrf, signin)
+  // before it can redirect to Google — without a catch here, any of those
+  // failing (offline, a slow/cold server) left the button disabled with a
+  // spinner and no way to tell the user anything went wrong.
+  const [signingIn, doSignIn] = useAsyncAction(async () => {
+    try {
+      await signIn("google");
+    } catch {
+      toast.error("Couldn't reach Google to sign in. Check your connection and try again.");
+    }
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -34,7 +45,7 @@ export function SignInModal({
         </DialogHeader>
         <Button className="w-full" disabled={signingIn} onClick={() => doSignIn()}>
           {signingIn && <Loader2 className="animate-spin" />}
-          Continue with Google
+          {signingIn ? "Redirecting to Google…" : "Continue with Google"}
         </Button>
       </DialogContent>
     </Dialog>

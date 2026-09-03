@@ -5,26 +5,29 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { generateId } from "@/lib/id";
 import { providerProfileSchema } from "@/lib/validations";
-import { getMyShopId, hasShopPermission } from "@/lib/authz";
+import { hasShopPermission } from "@/lib/authz";
 import type { ActionState } from "@/app/actions/types";
 
-// If the signed-in user already has a shop context (they own one, or are a
-// team member with MANAGE_LISTING), this edits that shop. Otherwise it
-// creates a brand-new shop owned by them.
+export type ProviderActionState = ActionState & { providerId?: string };
+
+// `providerId` non-null edits that specific shop (the owner always has
+// MANAGE_LISTING; a team member needs it granted). `providerId` null always
+// creates a brand-new shop owned by the signed-in user — a user can own
+// several, see lib/authz.ts#getMyShops.
 export async function upsertProviderProfile(
-  _prevState: ActionState,
+  providerId: string | null,
+  _prevState: ProviderActionState,
   formData: FormData,
-): Promise<ActionState> {
+): Promise<ProviderActionState> {
   const session = await auth();
   if (!session?.user) {
     return { error: "You must be signed in." };
   }
 
-  const existingId = await getMyShopId(session.user.id);
-  if (existingId) {
+  if (providerId) {
     const allowed = await hasShopPermission(
       session.user.id,
-      existingId,
+      providerId,
       "MANAGE_LISTING",
     );
     if (!allowed) {
@@ -62,28 +65,32 @@ export async function upsertProviderProfile(
     ...rest,
   };
 
-  if (existingId) {
-    await db.providerProfile.update({ where: { id: existingId }, data });
+  let id = providerId;
+  if (id) {
+    await db.providerProfile.update({ where: { id }, data });
   } else {
+    id = generateId();
     await db.providerProfile.create({
-      data: { id: generateId(), userId: session.user.id, ...data },
+      data: { id, userId: session.user.id, ...data },
     });
   }
 
   revalidatePath("/");
-  return { success: true };
+  return { success: true, providerId: id };
 }
 
-export async function deleteProviderProfile(): Promise<ActionState> {
+// Deletion is irreversible, so this requires actual ownership (not just the
+// MANAGE_LISTING grant a team member could hold).
+export async function deleteProviderProfile(providerId: string): Promise<ActionState> {
   const session = await auth();
   if (!session?.user) {
     return { error: "You must be signed in." };
   }
 
   const profile = await db.providerProfile.findUnique({
-    where: { userId: session.user.id },
+    where: { id: providerId },
   });
-  if (!profile) {
+  if (!profile || profile.userId !== session.user.id) {
     return { error: "No provider listing found." };
   }
 

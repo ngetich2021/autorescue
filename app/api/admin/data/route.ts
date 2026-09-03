@@ -8,14 +8,22 @@ import { getAdminDashboardData } from "@/lib/queries";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (!(await isPlatformMember(session.user.id))) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    if (!(await isPlatformMember(session.user.id))) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
 
-  const data = await getAdminDashboardData();
-  return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
+    const data = await getAdminDashboardData();
+    return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("[admin/data] database unavailable:", error);
+    return NextResponse.json(
+      { error: "Database temporarily unavailable" },
+      { status: 503, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 }

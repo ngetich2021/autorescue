@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Megaphone } from "lucide-react";
+import { Megaphone, BadgeCheck } from "lucide-react";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -126,7 +126,12 @@ export function ShopProductsModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{shop.businessName}</DialogTitle>
+          <DialogTitle className="flex items-center gap-1">
+            {shop.businessName}
+            {shop.isVerified && (
+              <BadgeCheck className="size-4 shrink-0 fill-blue-500 text-white" />
+            )}
+          </DialogTitle>
           <DialogDescription>
             {shop.phone} · {shop.email}
             {shop.address ? ` · ${shop.address}` : ""}

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getMyShopId, hasShopPermission } from "@/lib/authz";
+import { getMyShops, resolveRequestedShopId, hasShopPermission } from "@/lib/authz";
 import {
   getMyProducts,
   getMyServices,
@@ -20,11 +20,20 @@ export const metadata: Metadata = {
 // paint instead of a loading skeleton on every visit.
 export const revalidate = 10;
 
-export default async function ShopManagePage() {
+export default async function ShopManagePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ shop?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/");
 
-  const providerId = await getMyShopId(session.user.id);
+  const { shop: requestedShop } = await searchParams;
+  const shops = await getMyShops(session.user.id);
+  const providerId = await resolveRequestedShopId(
+    session.user.id,
+    requestedShop ?? null,
+  );
   const canManageRequests =
     providerId !== null &&
     (await hasShopPermission(session.user.id, providerId, "MANAGE_REQUESTS"));
@@ -41,9 +50,10 @@ export default async function ShopManagePage() {
 
   return (
     <ShopManageDashboard
-      hasProvider={providerId !== null}
+      providerId={providerId}
+      shops={shops}
       canManageRequests={canManageRequests}
-      isVerified={provider?.isVerified ?? false}
+      verifiedUntil={provider?.verifiedUntil ?? null}
       initialProducts={products}
       initialServices={services}
       initialAds={ads}

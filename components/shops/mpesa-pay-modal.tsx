@@ -19,7 +19,7 @@ import type { ActionState } from "@/app/actions/types";
 import {
   PROMOTION_LOCAL_RATE_KES,
   PROMOTION_UNIVERSAL_RATE_KES,
-  VERIFICATION_BADGE_FEE_KES,
+  VERIFICATION_BADGE_RATE_KES,
 } from "@/lib/validations";
 
 type Props =
@@ -35,6 +35,7 @@ type Props =
       open: boolean;
       onOpenChange: (open: boolean) => void;
       purpose: "BADGE";
+      providerId: string;
       onPaid: () => void;
     };
 
@@ -55,9 +56,9 @@ export function MpesaPayModal(props: Props) {
       ? props.isUniversal
         ? PROMOTION_UNIVERSAL_RATE_KES
         : PROMOTION_LOCAL_RATE_KES
-      : VERIFICATION_BADGE_FEE_KES;
-  const daysNum = purpose === "PROMOTION" ? Math.max(1, Number(days) || 1) : 1;
-  const total = purpose === "PROMOTION" ? rate * daysNum : VERIFICATION_BADGE_FEE_KES;
+      : VERIFICATION_BADGE_RATE_KES;
+  const daysNum = Math.max(1, Number(days) || 1);
+  const total = rate * daysNum;
 
   useEffect(() => {
     if (state.error) toast.error(state.error);
@@ -107,7 +108,7 @@ export function MpesaPayModal(props: Props) {
           <DialogDescription>
             {purpose === "PROMOTION"
               ? `KES ${rate}/day (${props.isUniversal ? "universal" : "local"} reach). You'll get an M-Pesa prompt on your phone.`
-              : `A one-time KES ${VERIFICATION_BADGE_FEE_KES} fee lifts your shop out of the 100m unverified visibility cap.`}
+              : `KES ${rate}/day lifts your shop out of the 100m unverified visibility cap for as long as it stays paid up.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -124,6 +125,9 @@ export function MpesaPayModal(props: Props) {
             {purpose === "PROMOTION" && (
               <input type="hidden" name="shopAdId" value={props.shopAdId} />
             )}
+            {purpose === "BADGE" && (
+              <input type="hidden" name="providerId" value={props.providerId} />
+            )}
             <div className="grid gap-1.5">
               <Label htmlFor="phone">M-Pesa phone number</Label>
               <Input
@@ -138,24 +142,22 @@ export function MpesaPayModal(props: Props) {
                 <p className="text-xs text-destructive">{state.fieldErrors.phone[0]}</p>
               )}
             </div>
-            {purpose === "PROMOTION" && (
-              <div className="grid gap-1.5">
-                <Label htmlFor="days">Days</Label>
-                <Input
-                  id="days"
-                  name="days"
-                  type="number"
-                  min={1}
-                  max={90}
-                  value={days}
-                  onChange={(e) => setDays(e.target.value)}
-                  required
-                />
-                {state.fieldErrors?.days && (
-                  <p className="text-xs text-destructive">{state.fieldErrors.days[0]}</p>
-                )}
-              </div>
-            )}
+            <div className="grid gap-1.5">
+              <Label htmlFor="days">Days</Label>
+              <Input
+                id="days"
+                name="days"
+                type="number"
+                min={1}
+                max={purpose === "PROMOTION" ? 90 : 365}
+                value={days}
+                onChange={(e) => setDays(e.target.value)}
+                required
+              />
+              {state.fieldErrors?.days && (
+                <p className="text-xs text-destructive">{state.fieldErrors.days[0]}</p>
+              )}
+            </div>
             <p className="text-sm font-medium">Total: KES {total.toLocaleString()}</p>
             <DialogFooter>
               <Button type="submit" disabled={pending}>

@@ -5,16 +5,15 @@ import { db } from "@/lib/db";
 import { generateId } from "@/lib/id";
 import { productSchema } from "@/lib/validations";
 import { uploadImageToCloudinary } from "@/lib/cloudinary";
-import { getMyShopId, hasShopPermission } from "@/lib/authz";
+import { hasShopPermission } from "@/lib/authz";
 import type { ActionState } from "@/app/actions/types";
 
-// Resolves the shop this user manages and confirms they hold MANAGE_PRODUCTS
-// (the owner always does; a team member needs the permission granted).
+// Confirms the user holds MANAGE_PRODUCTS on the given shop (the owner
+// always does; a team member needs the permission granted).
 async function requireProductAccess(
   userId: string,
+  providerId: string,
 ): Promise<{ providerId: string } | { error: string }> {
-  const providerId = await getMyShopId(userId);
-  if (!providerId) return { error: "Create your provider listing first." };
   const allowed = await hasShopPermission(userId, providerId, "MANAGE_PRODUCTS");
   if (!allowed) {
     return { error: "You don't have permission to manage this shop's products." };
@@ -32,13 +31,14 @@ function parseProduct(formData: FormData) {
 }
 
 export async function createProduct(
+  providerId: string,
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const access = await requireProductAccess(session.user.id);
+  const access = await requireProductAccess(session.user.id, providerId);
   if ("error" in access) return { error: access.error };
 
   const parsed = parseProduct(formData);
@@ -74,13 +74,11 @@ export async function updateProduct(
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const access = await requireProductAccess(session.user.id);
-  if ("error" in access) return { error: access.error };
-
-  const existing = await db.product.findFirst({
-    where: { id: productId, providerId: access.providerId },
-  });
+  const existing = await db.product.findUnique({ where: { id: productId } });
   if (!existing) return { error: "Product not found." };
+
+  const access = await requireProductAccess(session.user.id, existing.providerId);
+  if ("error" in access) return { error: access.error };
 
   const parsed = parseProduct(formData);
   if (!parsed.success) {
@@ -106,13 +104,11 @@ export async function deleteProduct(productId: string): Promise<ActionState> {
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const access = await requireProductAccess(session.user.id);
-  if ("error" in access) return { error: access.error };
-
-  const existing = await db.product.findFirst({
-    where: { id: productId, providerId: access.providerId },
-  });
+  const existing = await db.product.findUnique({ where: { id: productId } });
   if (!existing) return { error: "Product not found." };
+
+  const access = await requireProductAccess(session.user.id, existing.providerId);
+  if ("error" in access) return { error: access.error };
 
   await db.product.delete({ where: { id: productId } });
   return { success: true };

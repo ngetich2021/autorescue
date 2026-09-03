@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, MapPin, BadgeCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,7 @@ import {
   PLATFORM_PERMISSIONS,
   PLATFORM_PERMISSION_LABELS,
 } from "@/lib/permissions";
-import { SERVICE_TYPE_LABELS, type ServiceType } from "@/lib/validations";
+import { SERVICE_TYPE_LABELS, REQUEST_STATUSES, type ServiceType } from "@/lib/validations";
 import {
   createPlatformRole,
   updatePlatformRole,
@@ -77,6 +77,57 @@ type ShopAdRow = ShopOwnedRef & {
   isActive: boolean;
   createdAt: string | Date;
 };
+type PaymentRow = ShopOwnedRef & {
+  id: string;
+  purpose: string;
+  amount: number;
+  phone: string;
+  status: string;
+  days: number | null;
+  mpesaReceiptNumber: string | null;
+  resultDesc: string | null;
+  createdAt: string | Date;
+};
+type RescueRequestRow = ShopOwnedRef & {
+  id: string;
+  customerName: string;
+  customerPhone: string;
+  serviceType: string;
+  status: string;
+  latitude: number;
+  longitude: number;
+  createdAt: string | Date;
+};
+
+type UserRow = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  createdAt: string | Date;
+  providerProfiles: { businessName: string }[];
+  platformMember: { role: { name: string } } | null;
+  shopMemberships: { role: { name: string }; provider: { businessName: string } }[];
+};
+
+const PAYMENT_PURPOSE_LABELS: Record<string, string> = {
+  PROMOTION: "Promotion",
+  BADGE: "Verification badge",
+};
+
+function paymentStatusVariant(status: string): "secondary" | "destructive" | "outline" {
+  if (status === "COMPLETED") return "secondary";
+  if (status === "FAILED") return "destructive";
+  return "outline";
+}
+
+// Verification is now a paid, day-based window (like a ShopAd promotion) —
+// the raw isVerified column only says a badge payment has ever completed,
+// so "currently verified" also needs verifiedUntil to still be in the
+// future — same check as lib/queries.ts#withDistanceAndServiceTypes.
+function isCurrentlyVerified(row: { isVerified: boolean; verifiedUntil: string | Date | null }) {
+  return row.isVerified && row.verifiedUntil != null && new Date(row.verifiedUntil) > new Date();
+}
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -88,6 +139,9 @@ type AdminDashboardData = {
   products: ProductRow[];
   services: ServiceRow[];
   shopAds: ShopAdRow[];
+  payments: PaymentRow[];
+  rescueRequests: RescueRequestRow[];
+  users: UserRow[];
 };
 
 export function AdminDashboard({ initialData }: { initialData: AdminDashboardData }) {
@@ -98,20 +152,50 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
   const [products, setProducts] = useState<ProductRow[]>(initialData.products);
   const [services, setServices] = useState<ServiceRow[]>(initialData.services);
   const [shopAds, setShopAds] = useState<ShopAdRow[]>(initialData.shopAds);
+  const [payments, setPayments] = useState<PaymentRow[]>(initialData.payments);
+  const [rescueRequests, setRescueRequests] = useState<RescueRequestRow[]>(
+    initialData.rescueRequests,
+  );
+  const [users, setUsers] = useState<UserRow[]>(initialData.users);
   const [selectedProviderId, setSelectedProviderId] = useState<string | null>(null);
   const [selectedAdId, setSelectedAdId] = useState<string | null>(null);
 
+  const loadingRef = useRef(false);
+  const warnedRef = useRef(false);
+
   async function load() {
-    const res = await fetch("/api/admin/data", { cache: "no-store" });
-    const data = res.ok ? await res.json() : null;
-    if (data) {
-      setRoles(data.roles ?? []);
-      setMembers(data.members ?? []);
-      setProviders(data.providers ?? []);
-      setBrandAds(data.brandAds ?? []);
-      setProducts(data.products ?? []);
-      setServices(data.services ?? []);
-      setShopAds(data.shopAds ?? []);
+    // A stalled request (DB outage) can outlive the 5s poll tick — without
+    // this guard, every subsequent tick fires another overlapping fetch on
+    // top of the one still hanging, piling up concurrent requests against an
+    // already-unavailable database.
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    try {
+      const res = await fetch("/api/admin/data", { cache: "no-store" });
+      const data = res.ok ? await res.json() : null;
+      if (data) {
+        setRoles(data.roles ?? []);
+        setMembers(data.members ?? []);
+        setProviders(data.providers ?? []);
+        setBrandAds(data.brandAds ?? []);
+        setProducts(data.products ?? []);
+        setServices(data.services ?? []);
+        setShopAds(data.shopAds ?? []);
+        setPayments(data.payments ?? []);
+        setRescueRequests(data.rescueRequests ?? []);
+        setUsers(data.users ?? []);
+        warnedRef.current = false;
+      } else if (!warnedRef.current) {
+        warnedRef.current = true;
+        toast.error("Couldn't refresh admin data — database unavailable.");
+      }
+    } catch {
+      if (!warnedRef.current) {
+        warnedRef.current = true;
+        toast.error("Couldn't refresh admin data — database unavailable.");
+      }
+    } finally {
+      loadingRef.current = false;
     }
   }
 
@@ -164,9 +248,17 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
       sortable: true,
       sortValue: (row) => (row.isActive ? 1 : 0),
       render: (row) => (
-        <Badge variant={row.isActive ? "secondary" : "outline"}>
-          {row.isActive ? "Active" : "Deactivated"}
-        </Badge>
+        <div className="flex flex-wrap gap-1">
+          <Badge variant={row.isActive ? "secondary" : "outline"}>
+            {row.isActive ? "Active" : "Deactivated"}
+          </Badge>
+          {isCurrentlyVerified(row) && (
+            <Badge variant="secondary" className="gap-1">
+              <BadgeCheck className="size-3" /> Verified until{" "}
+              {new Date(row.verifiedUntil!).toLocaleDateString()}
+            </Badge>
+          )}
+        </div>
       ),
     },
     {
@@ -314,6 +406,197 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
     },
   ];
 
+  const paymentColumns: DataTableColumn<PaymentRow>[] = [
+    shopColumn<PaymentRow>(),
+    {
+      key: "purpose",
+      header: "For",
+      sortable: true,
+      sortValue: (row) => row.purpose,
+      render: (row) => PAYMENT_PURPOSE_LABELS[row.purpose] ?? row.purpose,
+    },
+    {
+      key: "coverage",
+      header: "Coverage",
+      sortable: true,
+      sortValue: (row) => new Date(row.createdAt).getTime(),
+      render: (row) => {
+        // Only a PROMOTION payment buys a time-boxed window (days is unset
+        // for BADGE — that's a one-time, non-expiring fee, see
+        // app/actions/payment.ts#initiateBadgePayment). A payment that never
+        // completed never actually bought any coverage.
+        if (row.status === "FAILED") {
+          return <span className="text-xs text-muted-foreground">—</span>;
+        }
+        if (!row.days) {
+          return <span className="text-xs text-muted-foreground">One-time</span>;
+        }
+        const start = new Date(row.createdAt);
+        const end = new Date(start.getTime() + row.days * 24 * 60 * 60 * 1000);
+        return (
+          <span className="text-xs">
+            {start.toLocaleDateString()} – {end.toLocaleDateString()}
+          </span>
+        );
+      },
+    },
+    {
+      key: "amount",
+      header: "Amount",
+      sortable: true,
+      sortValue: (row) => row.amount,
+      render: (row) => `KES ${row.amount.toLocaleString()}`,
+    },
+    { key: "phone", header: "Phone", render: (row) => row.phone },
+    {
+      key: "receipt",
+      header: "Receipt",
+      render: (row) => row.mpesaReceiptNumber ?? "—",
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      sortValue: (row) => row.status,
+      render: (row) => (
+        <div className="flex flex-col gap-0.5">
+          <Badge variant={paymentStatusVariant(row.status)}>{row.status}</Badge>
+          {row.status === "FAILED" && row.resultDesc && (
+            <span className="text-xs text-muted-foreground">{row.resultDesc}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: "createdAt",
+      header: "Paid on",
+      sortable: true,
+      sortValue: (row) => new Date(row.createdAt).getTime(),
+      render: (row) => new Date(row.createdAt).toLocaleString(),
+    },
+  ];
+
+  const rescueRequestColumns: DataTableColumn<RescueRequestRow>[] = [
+    {
+      key: "customer",
+      header: "Customer",
+      sortable: true,
+      sortValue: (row) => row.customerName.toLowerCase(),
+      render: (row) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{row.customerName}</span>
+          <span className="text-xs text-muted-foreground">{row.customerPhone}</span>
+        </div>
+      ),
+    },
+    shopColumn<RescueRequestRow>(),
+    {
+      key: "service",
+      header: "Needs",
+      render: (row) => (
+        <Badge variant="secondary">
+          {SERVICE_TYPE_LABELS[row.serviceType as ServiceType] ?? row.serviceType}
+        </Badge>
+      ),
+    },
+    {
+      key: "location",
+      header: "Location",
+      stopRowClick: true,
+      render: (row) => (
+        <a
+          href={`https://www.google.com/maps?q=${row.latitude},${row.longitude}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-primary hover:underline"
+        >
+          <MapPin className="size-3.5" /> Open in Maps
+        </a>
+      ),
+    },
+    {
+      key: "status",
+      header: "Status",
+      sortable: true,
+      sortValue: (row) => row.status,
+      render: (row) => (
+        <Badge variant={row.status === "COMPLETED" ? "secondary" : "outline"}>
+          {row.status}
+        </Badge>
+      ),
+    },
+    {
+      key: "createdAt",
+      header: "Date",
+      sortable: true,
+      sortValue: (row) => new Date(row.createdAt).getTime(),
+      render: (row) => new Date(row.createdAt).toLocaleString(),
+    },
+  ];
+
+  const userColumns: DataTableColumn<UserRow>[] = [
+    {
+      key: "name",
+      header: "Name",
+      sortable: true,
+      sortValue: (row) => (row.name ?? row.email ?? "").toLowerCase(),
+      render: (row) => (
+        <div className="flex flex-col">
+          <span className="font-medium">{row.name ?? "—"}</span>
+          <span className="text-xs text-muted-foreground">{row.email}</span>
+        </div>
+      ),
+    },
+    {
+      key: "phone",
+      header: "Phone",
+      render: (row) => row.phone ?? "—",
+    },
+    {
+      key: "roles",
+      header: "Role",
+      render: (row) => {
+        const badges: React.ReactNode[] = [];
+        for (const shop of row.providerProfiles) {
+          badges.push(
+            <Badge key={`owner-${shop.businessName}`} variant="secondary">
+              Owner · {shop.businessName}
+            </Badge>,
+          );
+        }
+        if (row.platformMember) {
+          badges.push(
+            <Badge key="platform" variant="outline">
+              Staff · {row.platformMember.role.name}
+            </Badge>,
+          );
+        }
+        for (const membership of row.shopMemberships) {
+          badges.push(
+            <Badge key={`shop-${membership.provider.businessName}`} variant="outline">
+              {membership.provider.businessName} · {membership.role.name}
+            </Badge>,
+          );
+        }
+        if (badges.length === 0) {
+          badges.push(
+            <Badge key="customer" variant="outline">
+              Customer
+            </Badge>,
+          );
+        }
+        return <div className="flex flex-wrap gap-1">{badges}</div>;
+      },
+    },
+    {
+      key: "createdAt",
+      header: "Joined",
+      sortable: true,
+      sortValue: (row) => new Date(row.createdAt).getTime(),
+      render: (row) => new Date(row.createdAt).toLocaleDateString(),
+    },
+  ];
+
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -335,11 +618,14 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
         <TabsList>
           <TabsTrigger value="staff">Staff</TabsTrigger>
           <TabsTrigger value="roles">Roles</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="providers">Providers</TabsTrigger>
           <TabsTrigger value="products">Products</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>
           <TabsTrigger value="promotions">Promotions</TabsTrigger>
           <TabsTrigger value="ads">Brand ads</TabsTrigger>
+          <TabsTrigger value="payments">Payments</TabsTrigger>
+          <TabsTrigger value="requests">Rescue requests</TabsTrigger>
         </TabsList>
 
         <TabsContent value="staff" className="flex flex-col gap-3 pt-4">
@@ -368,6 +654,17 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
           />
         </TabsContent>
 
+        <TabsContent value="users" className="pt-4">
+          <DataTable
+            columns={userColumns}
+            data={users}
+            searchPlaceholder="Search users…"
+            searchValue={(row) =>
+              `${row.name ?? ""} ${row.email ?? ""} ${row.phone ?? ""} ${row.providerProfiles.map((p) => p.businessName).join(" ")}`
+            }
+          />
+        </TabsContent>
+
         <TabsContent value="providers" className="pt-4">
           <DataTable
             columns={providerColumns}
@@ -384,6 +681,16 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
                 ],
                 predicate: (row, value) =>
                   value === "active" ? row.isActive : !row.isActive,
+              },
+              {
+                key: "verification",
+                label: "Verification",
+                options: [
+                  { value: "verified", label: "Verified" },
+                  { value: "unverified", label: "Unverified" },
+                ],
+                predicate: (row, value) =>
+                  value === "verified" ? isCurrentlyVerified(row) : !isCurrentlyVerified(row),
               },
             ]}
             emptyMessage="No providers yet."
@@ -458,6 +765,64 @@ export function AdminDashboard({ initialData }: { initialData: AdminDashboardDat
             ]}
             emptyMessage="No ads yet."
             onRowClick={(row) => setSelectedAdId(row.id)}
+          />
+        </TabsContent>
+
+        <TabsContent value="payments" className="pt-4">
+          <DataTable
+            columns={paymentColumns}
+            data={payments}
+            searchPlaceholder="Search payments…"
+            searchValue={(row) =>
+              `${row.provider.businessName} ${row.phone} ${row.mpesaReceiptNumber ?? ""} ${PAYMENT_PURPOSE_LABELS[row.purpose] ?? row.purpose}`
+            }
+            filters={[
+              {
+                key: "status",
+                label: "Status",
+                options: [
+                  { value: "PENDING", label: "Pending" },
+                  { value: "COMPLETED", label: "Completed" },
+                  { value: "FAILED", label: "Failed" },
+                ],
+                predicate: (row, value) => row.status === value,
+              },
+              {
+                key: "purpose",
+                label: "For",
+                options: [
+                  { value: "PROMOTION", label: "Promotion" },
+                  { value: "BADGE", label: "Verification badge" },
+                ],
+                predicate: (row, value) => row.purpose === value,
+              },
+            ]}
+            emptyMessage="No payments yet."
+            onRowClick={(row) => setSelectedProviderId(row.providerId)}
+          />
+        </TabsContent>
+
+        <TabsContent value="requests" className="pt-4">
+          <DataTable
+            columns={rescueRequestColumns}
+            data={rescueRequests}
+            searchPlaceholder="Search requests…"
+            searchValue={(row) =>
+              `${row.customerName} ${row.customerPhone} ${row.provider.businessName}`
+            }
+            filters={[
+              {
+                key: "status",
+                label: "Status",
+                options: REQUEST_STATUSES.map((status) => ({
+                  value: status,
+                  label: status.charAt(0) + status.slice(1).toLowerCase(),
+                })),
+                predicate: (row, value) => row.status === value,
+              },
+            ]}
+            emptyMessage="No rescue requests yet."
+            onRowClick={(row) => setSelectedProviderId(row.providerId)}
           />
         </TabsContent>
       </Tabs>

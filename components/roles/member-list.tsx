@@ -11,6 +11,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useAsyncAction } from "@/lib/use-async-action";
 import type { ActionState } from "@/app/actions/types";
 
@@ -36,27 +44,41 @@ export function MemberList({
   removeAction: (memberId: string) => Promise<ActionState>;
   onChanged: () => void;
 }) {
-  if (members.length === 0) {
-    return (
-      <p className="py-4 text-center text-sm text-muted-foreground">
-        No one here yet.
-      </p>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-2">
-      {members.map((member) => (
-        <MemberRow
-          key={member.id}
-          member={member}
-          roles={roles}
-          updateRoleAction={updateRoleAction}
-          removeAction={removeAction}
-          onChanged={onChanged}
-        />
-      ))}
-    </div>
+    <Table>
+      <TableHeader>
+        <TableRow>
+          <TableHead>Name</TableHead>
+          <TableHead>Email</TableHead>
+          <TableHead>Status</TableHead>
+          <TableHead>Role</TableHead>
+          <TableHead className="text-right">Actions</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {members.length === 0 ? (
+          <TableRow>
+            <TableCell
+              colSpan={5}
+              className="py-4 text-center text-sm text-muted-foreground"
+            >
+              No one here yet.
+            </TableCell>
+          </TableRow>
+        ) : (
+          members.map((member) => (
+            <MemberRow
+              key={member.id}
+              member={member}
+              roles={roles}
+              updateRoleAction={updateRoleAction}
+              removeAction={removeAction}
+              onChanged={onChanged}
+            />
+          ))
+        )}
+      </TableBody>
+    </Table>
   );
 }
 
@@ -92,19 +114,21 @@ function MemberRow({
   const busy = roleChanging || removing;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3">
-      <div className="flex flex-col gap-0.5">
-        <span className="font-medium">
-          {member.user?.name ?? member.inviteEmail}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {member.inviteEmail}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        {member.status === "PENDING" && (
+    <TableRow>
+      <TableCell className="font-medium">
+        {member.user?.name ?? "—"}
+      </TableCell>
+      <TableCell className="text-muted-foreground">
+        {member.inviteEmail}
+      </TableCell>
+      <TableCell>
+        {member.status === "PENDING" ? (
           <Badge variant="outline">Pending</Badge>
+        ) : (
+          <Badge variant="secondary">Active</Badge>
         )}
+      </TableCell>
+      <TableCell>
         <Select
           value={member.roleId}
           onValueChange={(value) => value && changeRole(value)}
@@ -121,6 +145,8 @@ function MemberRow({
             ))}
           </SelectContent>
         </Select>
+      </TableCell>
+      <TableCell className="text-right">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -133,7 +159,7 @@ function MemberRow({
             <Trash2 className="text-destructive" />
           )}
         </Button>
-      </div>
-    </div>
+      </TableCell>
+    </TableRow>
   );
 }

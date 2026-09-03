@@ -29,16 +29,18 @@ export function ServiceFormModal({
   open,
   onOpenChange,
   service,
+  providerId,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   service: MyServiceDto | null;
+  providerId: string;
   onSaved: () => void;
 }) {
   const action = service
     ? updateService.bind(null, service.id)
-    : createService;
+    : createService.bind(null, providerId);
   const [state, formAction, pending] = useActionState(
     action,
     initialActionState,

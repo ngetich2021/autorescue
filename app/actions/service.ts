@@ -5,16 +5,15 @@ import { db } from "@/lib/db";
 import { generateId } from "@/lib/id";
 import { serviceSchema } from "@/lib/validations";
 import { uploadImageToCloudinary } from "@/lib/cloudinary";
-import { getMyShopId, hasShopPermission } from "@/lib/authz";
+import { hasShopPermission } from "@/lib/authz";
 import type { ActionState } from "@/app/actions/types";
 
 // Same permission as products — a shop's itemized services are managed
 // alongside its products, not a separate grant.
 async function requireServiceAccess(
   userId: string,
+  providerId: string,
 ): Promise<{ providerId: string } | { error: string }> {
-  const providerId = await getMyShopId(userId);
-  if (!providerId) return { error: "Create your provider listing first." };
   const allowed = await hasShopPermission(userId, providerId, "MANAGE_PRODUCTS");
   if (!allowed) {
     return { error: "You don't have permission to manage this shop's services." };
@@ -32,13 +31,14 @@ function parseService(formData: FormData) {
 }
 
 export async function createService(
+  providerId: string,
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const access = await requireServiceAccess(session.user.id);
+  const access = await requireServiceAccess(session.user.id, providerId);
   if ("error" in access) return { error: access.error };
 
   const parsed = parseService(formData);
@@ -74,13 +74,11 @@ export async function updateService(
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const access = await requireServiceAccess(session.user.id);
-  if ("error" in access) return { error: access.error };
-
-  const existing = await db.service.findFirst({
-    where: { id: serviceId, providerId: access.providerId },
-  });
+  const existing = await db.service.findUnique({ where: { id: serviceId } });
   if (!existing) return { error: "Service not found." };
+
+  const access = await requireServiceAccess(session.user.id, existing.providerId);
+  if ("error" in access) return { error: access.error };
 
   const parsed = parseService(formData);
   if (!parsed.success) {
@@ -106,13 +104,11 @@ export async function deleteService(serviceId: string): Promise<ActionState> {
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const access = await requireServiceAccess(session.user.id);
-  if ("error" in access) return { error: access.error };
-
-  const existing = await db.service.findFirst({
-    where: { id: serviceId, providerId: access.providerId },
-  });
+  const existing = await db.service.findUnique({ where: { id: serviceId } });
   if (!existing) return { error: "Service not found." };
+
+  const access = await requireServiceAccess(session.user.id, existing.providerId);
+  if ("error" in access) return { error: access.error };
 
   await db.service.delete({ where: { id: serviceId } });
   return { success: true };

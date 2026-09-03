@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Plus,
@@ -13,6 +14,7 @@ import {
   MapPin,
   ShieldCheck,
   BadgeCheck,
+  Store,
 } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +42,7 @@ import {
   SERVICE_TYPE_LABELS,
   PROMOTION_LOCAL_RATE_KES,
   PROMOTION_UNIVERSAL_RATE_KES,
-  VERIFICATION_BADGE_FEE_KES,
+  VERIFICATION_BADGE_RATE_KES,
   type RequestStatus,
   type ServiceType,
 } from "@/lib/validations";
@@ -58,29 +60,38 @@ export type MyRequestDto = {
 };
 
 export function ShopManageDashboard({
-  hasProvider,
+  providerId,
+  shops,
   canManageRequests,
-  isVerified,
+  verifiedUntil,
   initialProducts,
   initialServices,
   initialAds,
   initialRequests,
 }: {
-  hasProvider: boolean;
+  providerId: string | null;
+  shops: { id: string; businessName: string; role: "owner" | "member" }[];
   canManageRequests: boolean;
-  isVerified: boolean;
+  verifiedUntil: string | Date | null;
   initialProducts: MyProductDto[];
   initialServices: MyServiceDto[];
   initialAds: MyShopAdDto[];
   initialRequests: MyRequestDto[];
 }) {
-  const [hasProviderState, setHasProviderState] = useState(hasProvider);
-  const [verifiedState, setVerifiedState] = useState(isVerified);
+  const router = useRouter();
+  const hasProvider = providerId !== null;
+  const [verifiedUntilState, setVerifiedUntilState] = useState(verifiedUntil);
+  const verifiedThrough = verifiedUntilState ? new Date(verifiedUntilState) : null;
+  const verifiedState = verifiedThrough != null && verifiedThrough > new Date();
   const [products, setProducts] = useState(initialProducts);
   const [services, setServices] = useState(initialServices);
   const [ads, setAds] = useState(initialAds);
   const [requests, setRequests] = useState(initialRequests);
-  const [profileOpen, setProfileOpen] = useState(false);
+  // null = closed; { providerId: null } = creating a new shop; { providerId:
+  // "..." } = editing that shop.
+  const [profileMode, setProfileMode] = useState<{ providerId: string | null } | null>(
+    null,
+  );
   const [badgePayOpen, setBadgePayOpen] = useState(false);
   const [promoPayAd, setPromoPayAd] = useState<MyShopAdDto | null>(null);
 
@@ -92,26 +103,30 @@ export function ShopManageDashboard({
   const [editingAd, setEditingAd] = useState<MyShopAdDto | null>(null);
 
   async function refresh() {
+    const qs = providerId ? `?shop=${providerId}` : "";
     const [productsData, servicesData, adsData, requestsData, providerData] =
       await Promise.all([
-        fetch("/api/me/products").then((res) => res.json()),
-        fetch("/api/me/services").then((res) => res.json()),
-        fetch("/api/me/shop-ads").then((res) => res.json()),
+        fetch(`/api/me/products${qs}`).then((res) => res.json()),
+        fetch(`/api/me/services${qs}`).then((res) => res.json()),
+        fetch(`/api/me/shop-ads${qs}`).then((res) => res.json()),
         canManageRequests
-          ? fetch("/api/me/requests").then((res) => res.json())
+          ? fetch(`/api/me/requests${qs}`).then((res) => res.json())
           : Promise.resolve({ requests }),
-        fetch("/api/me/provider").then((res) => res.json()),
+        fetch(`/api/me/provider${qs}`).then((res) => res.json()),
       ]);
     setProducts(productsData.products ?? []);
     setServices(servicesData.services ?? []);
     setAds(adsData.ads ?? []);
     setRequests(requestsData.requests ?? []);
-    // Posting the shop listing for the first time (via the "Shop profile"
-    // modal below) flips this mid-session — re-derive it from the same
-    // fetch instead of trusting the server-rendered prop forever. Same for
-    // verification: a badge payment completing flips it without a reload.
-    setHasProviderState(productsData.hasProvider ?? false);
-    setVerifiedState(providerData.profile?.isVerified ?? false);
+    // A badge payment completing flips verification without a reload.
+    setVerifiedUntilState(providerData.profile?.verifiedUntil ?? null);
+  }
+
+  // Creating a shop (or switching to a different one) needs a fresh
+  // server-render — the selected shop drives which data every /api/me/*
+  // fetch and server action targets.
+  function selectShop(id: string) {
+    if (id !== providerId) router.push(`/shop/manage?shop=${id}`);
   }
 
   const productColumns: DataTableColumn<MyProductDto>[] = [
@@ -351,7 +366,7 @@ export function ShopManageDashboard({
           <p className="text-sm text-muted-foreground">
             Products, services, promotions, and rescue requests from customers.
           </p>
-          {hasProviderState && !verifiedState && (
+          {hasProvider && !verifiedState && (
             <p className="text-xs text-amber-600 dark:text-amber-500">
               Unverified — customers can only find your shop within 100m.
               Get verified to be discoverable at your normal search radius.
@@ -359,32 +374,72 @@ export function ShopManageDashboard({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {hasProviderState &&
-            (verifiedState ? (
-              <Badge variant="secondary" className="gap-1">
-                <BadgeCheck className="size-3.5" /> Verified
-              </Badge>
-            ) : (
-              <Button variant="outline" onClick={() => setBadgePayOpen(true)}>
-                <ShieldCheck /> Get verified — KES {VERIFICATION_BADGE_FEE_KES}
+          {shops.length > 1 && (
+            <Select
+              value={providerId ?? undefined}
+              onValueChange={(value) => value && selectShop(value)}
+            >
+              <SelectTrigger size="sm" className="w-44">
+                <Store className="size-3.5" />
+                <SelectValue placeholder="Select shop" />
+              </SelectTrigger>
+              <SelectContent>
+                {shops.map((shop) => (
+                  <SelectItem key={shop.id} value={shop.id}>
+                    {shop.businessName}
+                    {shop.role === "member" ? " (team)" : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {hasProvider && (
+            <div className="flex flex-col items-end gap-1">
+              {verifiedState && (
+                <Badge variant="secondary" className="gap-1">
+                  <BadgeCheck className="size-3.5" /> Verified until{" "}
+                  {verifiedThrough!.toLocaleDateString()}
+                </Badge>
+              )}
+              <Button variant="outline" size="sm" onClick={() => setBadgePayOpen(true)}>
+                <ShieldCheck />
+                {verifiedState
+                  ? "Extend verification"
+                  : `Get verified — KES ${VERIFICATION_BADGE_RATE_KES}/day`}
               </Button>
-            ))}
-          <Button variant="outline" onClick={() => setProfileOpen(true)}>
-            <Settings2 /> Shop profile
-          </Button>
+            </div>
+          )}
+          {hasProvider && (
+            <Button
+              variant="outline"
+              onClick={() => setProfileMode({ providerId: null })}
+            >
+              <Plus /> Add shop
+            </Button>
+          )}
+          {hasProvider && (
+            <Button
+              variant="outline"
+              onClick={() => setProfileMode({ providerId })}
+            >
+              <Settings2 /> Shop profile
+            </Button>
+          )}
           <Link href="/" className={buttonVariants({ variant: "ghost" })}>
             <ArrowLeft /> Back
           </Link>
         </div>
       </div>
 
-      {!hasProviderState ? (
+      {!hasProvider ? (
         <div className="flex flex-col items-center gap-3 py-16 text-center">
           <p className="text-sm text-muted-foreground">
             Post your service listing first, then come back to add products,
             services, and promotions.
           </p>
-          <Button onClick={() => setProfileOpen(true)}>Post your service</Button>
+          <Button onClick={() => setProfileMode({ providerId: null })}>
+            Post your service
+          </Button>
         </div>
       ) : (
         <Tabs defaultValue="products">
@@ -494,12 +549,14 @@ export function ShopManageDashboard({
         open={productFormOpen}
         onOpenChange={setProductFormOpen}
         product={editingProduct}
+        providerId={providerId ?? ""}
         onSaved={refresh}
       />
       <ServiceFormModal
         open={serviceFormOpen}
         onOpenChange={setServiceFormOpen}
         service={editingService}
+        providerId={providerId ?? ""}
         onSaved={refresh}
       />
       <ShopAdFormModal
@@ -507,24 +564,37 @@ export function ShopManageDashboard({
         onOpenChange={setAdFormOpen}
         ad={editingAd}
         products={products}
+        providerId={providerId ?? ""}
         onSaved={refresh}
       />
       <ProviderProfileFormModal
-        open={profileOpen}
-        onOpenChange={(open) => {
-          setProfileOpen(open);
-          // Closing always re-checks hasProvider/products/services/ads —
-          // harmless on cancel, and the only way to notice a first-time
-          // "Post your service" save (the modal has no onSaved callback).
-          if (!open) refresh();
+        open={profileMode !== null}
+        onOpenChange={(open) => !open && setProfileMode(null)}
+        providerId={profileMode?.providerId ?? null}
+        onSaved={(id) => {
+          setProfileMode(null);
+          selectShop(id);
+          // Editing the currently-selected shop is a no-op navigation —
+          // refresh in place to pick up the change instead.
+          if (id === providerId) refresh();
+        }}
+        onDeleted={() => {
+          setProfileMode(null);
+          // Deleting always targets the currently-selected shop (the only
+          // one "Shop profile" ever edits) — hand off to the server to
+          // resolve whichever shop is next, if any.
+          router.push("/shop/manage");
         }}
       />
-      <MpesaPayModal
-        open={badgePayOpen}
-        onOpenChange={setBadgePayOpen}
-        purpose="BADGE"
-        onPaid={refresh}
-      />
+      {hasProvider && (
+        <MpesaPayModal
+          open={badgePayOpen}
+          onOpenChange={setBadgePayOpen}
+          purpose="BADGE"
+          providerId={providerId!}
+          onPaid={refresh}
+        />
+      )}
       {promoPayAd && (
         <MpesaPayModal
           open={promoPayAd !== null}

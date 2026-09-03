@@ -3,14 +3,14 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { generateId } from "@/lib/id";
-import { getMyShopId, hasShopPermission } from "@/lib/authz";
+import { hasShopPermission } from "@/lib/authz";
 import { formatMpesaPhone, initiateStkPush } from "@/lib/mpesa";
 import {
   promotionPaymentSchema,
   badgePaymentSchema,
   PROMOTION_LOCAL_RATE_KES,
   PROMOTION_UNIVERSAL_RATE_KES,
-  VERIFICATION_BADGE_FEE_KES,
+  VERIFICATION_BADGE_RATE_KES,
 } from "@/lib/validations";
 import type { ActionState } from "@/app/actions/types";
 
@@ -37,16 +37,14 @@ export async function initiatePromotionPayment(
     return { fieldErrors: parsed.error.flatten().fieldErrors };
   }
 
-  const providerId = await getMyShopId(session.user.id);
-  if (!providerId) return { error: "Create your provider listing first." };
+  const shopAd = await db.shopAd.findUnique({
+    where: { id: parsed.data.shopAdId },
+  });
+  if (!shopAd) return { error: "Promotion not found." };
+  const providerId = shopAd.providerId;
   if (!(await hasShopPermission(session.user.id, providerId, "MANAGE_PRODUCTS"))) {
     return { error: "You don't have permission to manage this shop's promotions." };
   }
-
-  const shopAd = await db.shopAd.findFirst({
-    where: { id: parsed.data.shopAdId, providerId },
-  });
-  if (!shopAd) return { error: "Promotion not found." };
 
   const phone = formatMpesaPhone(parsed.data.phone);
   if (!phone) return { error: "Enter a valid Kenyan M-Pesa number." };
@@ -89,9 +87,10 @@ export async function initiatePromotionPayment(
   return { success: true, paymentId: payment.id };
 }
 
-// Starts an STK push for the one-off KES 20 verification badge, which lifts
-// the shop out of the 100m unverified visibility cap once paid — see
-// lib/queries.ts#withDistanceAndServiceTypes.
+// Starts an STK push for the verification badge — KES 20/day, lifting the
+// shop out of the 100m unverified visibility cap for as long as it stays
+// paid up. Days stack onto whatever's left (app/api/mpesa/callback/route.ts),
+// same as a promotion, so this doubles as the "renew" flow too.
 export async function initiateBadgePayment(
   _prevState: PaymentActionState,
   formData: FormData,
@@ -99,30 +98,35 @@ export async function initiateBadgePayment(
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const parsed = badgePaymentSchema.safeParse({ phone: formData.get("phone") });
+  const parsed = badgePaymentSchema.safeParse({
+    providerId: formData.get("providerId"),
+    days: formData.get("days"),
+    phone: formData.get("phone"),
+  });
   if (!parsed.success) {
     return { fieldErrors: parsed.error.flatten().fieldErrors };
   }
+  const { providerId } = parsed.data;
 
-  const providerId = await getMyShopId(session.user.id);
-  if (!providerId) return { error: "Create your provider listing first." };
   if (!(await hasShopPermission(session.user.id, providerId, "MANAGE_LISTING"))) {
     return { error: "You don't have permission to manage this shop's listing." };
   }
 
   const provider = await db.providerProfile.findUnique({ where: { id: providerId } });
   if (!provider) return { error: "Shop not found." };
-  if (provider.isVerified) return { error: "This shop is already verified." };
 
   const phone = formatMpesaPhone(parsed.data.phone);
   if (!phone) return { error: "Enter a valid Kenyan M-Pesa number." };
+
+  const amount = VERIFICATION_BADGE_RATE_KES * parsed.data.days;
 
   const payment = await db.payment.create({
     data: {
       id: generateId(),
       providerId,
       purpose: "BADGE",
-      amount: VERIFICATION_BADGE_FEE_KES,
+      days: parsed.data.days,
+      amount,
       phone,
       status: "PENDING",
     },
@@ -131,7 +135,7 @@ export async function initiateBadgePayment(
   try {
     const { checkoutRequestId, merchantRequestId } = await initiateStkPush({
       phone,
-      amount: VERIFICATION_BADGE_FEE_KES,
+      amount,
       accountReference: provider.businessName,
       transactionDesc: "Verify",
     });

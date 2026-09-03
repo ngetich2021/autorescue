@@ -40,15 +40,19 @@ export function ShopAdFormModal({
   onOpenChange,
   ad,
   products,
+  providerId,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   ad: MyShopAdDto | null;
   products: { id: string; name: string }[];
+  providerId: string;
   onSaved: () => void;
 }) {
-  const action = ad ? updateShopAd.bind(null, ad.id) : createShopAd;
+  const action = ad
+    ? updateShopAd.bind(null, ad.id)
+    : createShopAd.bind(null, providerId);
   const [state, formAction, pending] = useActionState(
     action,
     initialActionState,

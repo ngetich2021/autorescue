@@ -231,7 +231,7 @@ export const inviteMemberSchema = z.object({
 
 export const PROMOTION_LOCAL_RATE_KES = 25;
 export const PROMOTION_UNIVERSAL_RATE_KES = 50;
-export const VERIFICATION_BADGE_FEE_KES = 20;
+export const VERIFICATION_BADGE_RATE_KES = 20;
 // Unverified shops (ProviderProfile.isVerified === false, the default) are
 // only discoverable within this radius regardless of a customer's chosen
 // search radius — see lib/queries.ts#withDistanceAndServiceTypes.
@@ -250,5 +250,7 @@ export const promotionPaymentSchema = z.object({
 });
 
 export const badgePaymentSchema = z.object({
+  providerId: z.string().min(1),
+  days: z.coerce.number().int().min(1, "Enter at least 1 day").max(365, "Max 365 days"),
   phone: mpesaPhoneSchema,
 });

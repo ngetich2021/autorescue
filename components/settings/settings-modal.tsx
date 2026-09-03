@@ -1,7 +1,5 @@
 "use client";
 
-import { useTransition } from "react";
-import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import {
@@ -12,10 +10,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
-import { deleteProviderProfile } from "@/app/actions/provider";
 import { useAsyncAction } from "@/lib/use-async-action";
 
+// Removing a shop listing now lives in the shop-management dashboard's
+// "Shop profile" editor (components/providers/provider-profile-form-modal.tsx)
+// instead of here — a user can own several shops, and deletion needs to know
+// which one, a context this account-level modal doesn't have.
 export function SettingsModal({
   open,
   onOpenChange,
@@ -24,27 +24,7 @@ export function SettingsModal({
   onOpenChange: (open: boolean) => void;
 }) {
   const { data: session } = useSession();
-  const [pending, startTransition] = useTransition();
   const [signingOut, doSignOut] = useAsyncAction(() => signOut());
-
-  function handleDeleteListing() {
-    if (
-      !confirm(
-        "Remove your provider listing? Customers won't be able to find you until you post again.",
-      )
-    ) {
-      return;
-    }
-    startTransition(async () => {
-      const result = await deleteProviderProfile();
-      if (result.success) {
-        toast.success("Listing removed.");
-        onOpenChange(false);
-      } else if (result.error) {
-        toast.error(result.error);
-      }
-    });
-  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -58,18 +38,6 @@ export function SettingsModal({
             {signingOut && <Loader2 className="animate-spin" />}
             Sign out
           </Button>
-          <Separator />
-          <div className="flex flex-col gap-1.5">
-            <p className="text-sm font-medium text-destructive">Danger zone</p>
-            <Button
-              variant="destructive"
-              disabled={pending}
-              onClick={handleDeleteListing}
-            >
-              {pending && <Loader2 className="animate-spin" />}
-              Remove my listing
-            </Button>
-          </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -3,7 +3,7 @@ import { auth } from "@/lib/auth";
 import {
   getPlatformPermissions,
   getShopPermissions,
-  getMyShopId,
+  getMyShops,
 } from "@/lib/authz";
 
 export async function GET() {
@@ -13,7 +13,8 @@ export async function GET() {
   }
 
   const platformPermissions = await getPlatformPermissions(session.user.id);
-  const shopId = await getMyShopId(session.user.id);
+  const shops = await getMyShops(session.user.id);
+  const shopId = shops[0]?.id ?? null;
   const shopPermissions = shopId
     ? await getShopPermissions(session.user.id, shopId)
     : new Set<string>();
@@ -26,5 +27,6 @@ export async function GET() {
     shop: shopId
       ? { providerId: shopId, permissions: Array.from(shopPermissions) }
       : null,
+    shops: shops.map(({ id, businessName }) => ({ id, businessName })),
   });
 }

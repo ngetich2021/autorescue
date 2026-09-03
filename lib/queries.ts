@@ -14,6 +14,7 @@ function withDistanceAndServiceTypes<
     longitude: number;
     serviceTypes: string;
     isVerified: boolean;
+    verifiedUntil: Date | null;
   },
 >(
   providers: T[],
@@ -24,9 +25,16 @@ function withDistanceAndServiceTypes<
     serviceType?: ServiceType;
   },
 ) {
+  const now = new Date();
   return providers
     .map((provider) => ({
       ...provider,
+      // Verification is a paid, day-based window (like a ShopAd promotion)
+      // — overrides the raw isVerified column with whether that window is
+      // still live, so every DTO built from this (ShopDto included) reflects
+      // the current, not merely the last-paid, state.
+      isVerified:
+        provider.isVerified && provider.verifiedUntil != null && provider.verifiedUntil > now,
       serviceTypes: parseServiceTypes(provider.serviceTypes),
       distanceKm: haversineDistanceKm(
         latitude,
@@ -36,7 +44,7 @@ function withDistanceAndServiceTypes<
       ),
     }))
     .filter((provider) => {
-      // Unverified shops (the default — see the KES 20 badge in
+      // Unverified shops (the default — see the KES 20/day badge in
       // app/actions/payment.ts#initiateBadgePayment) are only discoverable
       // within a fixed short radius, no matter how wide the customer's own
       // search radius is.
@@ -301,25 +309,92 @@ export function getAllShopAdsForAdmin() {
   });
 }
 
+// Every M-Pesa payment (promotion or verification-badge) across every shop —
+// lets an admin audit money actually moving through the platform, including
+// ones that never completed (see app/api/mpesa/callback/route.ts, the only
+// other place Payment rows are written to).
+export function getAllPaymentsForAdmin() {
+  return db.payment.findMany({
+    orderBy: { createdAt: "desc" },
+    include: ADMIN_SHOP_REF,
+  });
+}
+
+// Every rescue request across every shop — customers never sign in to send
+// one (see prisma/schema.prisma's RescueRequest comment), so this is an
+// admin's only platform-wide view of them; otherwise they're only visible
+// one shop at a time via getIncomingRequests.
+export function getAllRescueRequestsForAdmin() {
+  return db.rescueRequest.findMany({
+    orderBy: { createdAt: "desc" },
+    include: ADMIN_SHOP_REF,
+  });
+}
+
+// Every signed-in account, platform-wide — not just staff or shop owners.
+// Most users never touch a role table at all (rescue requesters don't even
+// sign in, per RescueRequest's schema comment), so this is the only place an
+// admin can see the full account list; role/shop badges are derived
+// client-side from the included relations.
+export function getAllUsersForAdmin() {
+  return db.user.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      providerProfiles: { select: { businessName: true } },
+      platformMember: { select: { role: { select: { name: true } } } },
+      shopMemberships: {
+        select: {
+          role: { select: { name: true } },
+          provider: { select: { businessName: true } },
+        },
+      },
+    },
+  });
+}
+
 // Backs both the admin page's initial (server-rendered) load and its
 // /api/admin/data poll (components/admin/admin-dashboard.tsx refreshes this
 // every 5s) — one place computing the exact same shape either way.
 export async function getAdminDashboardData() {
-  const [roles, members, rawProviders, brandAds, products, services, shopAds] =
-    await Promise.all([
-      getPlatformRoles(),
-      getPlatformMembers(),
-      getAllProvidersForAdmin(),
-      getAllBrandAdsForAdmin(),
-      getAllProductsForAdmin(),
-      getAllServicesForAdmin(),
-      getAllShopAdsForAdmin(),
-    ]);
+  const [
+    roles,
+    members,
+    rawProviders,
+    brandAds,
+    products,
+    services,
+    shopAds,
+    payments,
+    rescueRequests,
+    users,
+  ] = await Promise.all([
+    getPlatformRoles(),
+    getPlatformMembers(),
+    getAllProvidersForAdmin(),
+    getAllBrandAdsForAdmin(),
+    getAllProductsForAdmin(),
+    getAllServicesForAdmin(),
+    getAllShopAdsForAdmin(),
+    getAllPaymentsForAdmin(),
+    getAllRescueRequestsForAdmin(),
+    getAllUsersForAdmin(),
+  ]);
 
   const providers = rawProviders.map((provider) => ({
     ...provider,
     serviceTypes: parseServiceTypes(provider.serviceTypes),
   }));
 
-  return { roles, members, providers, brandAds, products, services, shopAds };
+  return {
+    roles,
+    members,
+    providers,
+    brandAds,
+    products,
+    services,
+    shopAds,
+    payments,
+    rescueRequests,
+    users,
+  };
 }

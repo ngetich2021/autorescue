@@ -5,14 +5,13 @@ import { db } from "@/lib/db";
 import { generateId } from "@/lib/id";
 import { shopAdSchema } from "@/lib/validations";
 import { uploadImageToCloudinary } from "@/lib/cloudinary";
-import { getMyShopId, hasShopPermission } from "@/lib/authz";
+import { hasShopPermission } from "@/lib/authz";
 import type { ActionState } from "@/app/actions/types";
 
 async function requireShopAdAccess(
   userId: string,
+  providerId: string,
 ): Promise<{ providerId: string } | { error: string }> {
-  const providerId = await getMyShopId(userId);
-  if (!providerId) return { error: "Create your provider listing first." };
   const allowed = await hasShopPermission(userId, providerId, "MANAGE_PRODUCTS");
   if (!allowed) {
     return { error: "You don't have permission to manage this shop's ads." };
@@ -30,13 +29,14 @@ function parseShopAd(formData: FormData) {
 }
 
 export async function createShopAd(
+  providerId: string,
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const access = await requireShopAdAccess(session.user.id);
+  const access = await requireShopAdAccess(session.user.id, providerId);
   if ("error" in access) return { error: access.error };
 
   const parsed = parseShopAd(formData);
@@ -73,13 +73,11 @@ export async function updateShopAd(
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const access = await requireShopAdAccess(session.user.id);
-  if ("error" in access) return { error: access.error };
-
-  const existing = await db.shopAd.findFirst({
-    where: { id: adId, providerId: access.providerId },
-  });
+  const existing = await db.shopAd.findUnique({ where: { id: adId } });
   if (!existing) return { error: "Ad not found." };
+
+  const access = await requireShopAdAccess(session.user.id, existing.providerId);
+  if ("error" in access) return { error: access.error };
 
   const parsed = parseShopAd(formData);
   if (!parsed.success) {
@@ -111,13 +109,11 @@ export async function deleteShopAd(adId: string): Promise<ActionState> {
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const access = await requireShopAdAccess(session.user.id);
-  if ("error" in access) return { error: access.error };
-
-  const existing = await db.shopAd.findFirst({
-    where: { id: adId, providerId: access.providerId },
-  });
+  const existing = await db.shopAd.findUnique({ where: { id: adId } });
   if (!existing) return { error: "Ad not found." };
+
+  const access = await requireShopAdAccess(session.user.id, existing.providerId);
+  if ("error" in access) return { error: access.error };
 
   await db.shopAd.delete({ where: { id: adId } });
   return { success: true };
@@ -130,13 +126,11 @@ export async function toggleShopAdActive(
   const session = await auth();
   if (!session?.user) return { error: "You must be signed in." };
 
-  const access = await requireShopAdAccess(session.user.id);
-  if ("error" in access) return { error: access.error };
-
-  const existing = await db.shopAd.findFirst({
-    where: { id: adId, providerId: access.providerId },
-  });
+  const existing = await db.shopAd.findUnique({ where: { id: adId } });
   if (!existing) return { error: "Ad not found." };
+
+  const access = await requireShopAdAccess(session.user.id, existing.providerId);
+  if ("error" in access) return { error: access.error };
 
   await db.shopAd.update({ where: { id: adId }, data: { isActive } });
   return { success: true };

@@ -24,7 +24,7 @@ model User {
   phone           String?
   accounts        Account[]
   sessions        Session[]
-  providerProfile ProviderProfile?
+  providerProfiles ProviderProfile[]
   brandAds        BrandAd[]
   platformMember  PlatformMember?
   shopMemberships ShopMember[]
@@ -69,7 +69,8 @@ model VerificationToken {
 // Google account maps to at most one provider (service) listing.
 model ProviderProfile {
   id             String          @id
-  userId         String          @unique
+  // No longer @unique — a user can own several shops (see lib/authz.ts#getMyShops).
+  userId         String
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   businessName   String
   // JSON-encoded array of ServiceType — a shop can offer several services.
@@ -89,6 +90,12 @@ model ProviderProfile {
   // (app/actions/payment.ts#initiateBadgePayment) lifts that cap.
   isVerified     Boolean         @default(false)
   verifiedAt     DateTime?
+  // Verification is now a paid, day-based window (like a ShopAd promotion)
+  // rather than a permanent one-time fee — see
+  // app/actions/payment.ts#initiateBadgePayment and the stacking logic in
+  // app/api/mpesa/callback/route.ts. "Currently verified" = isVerified &&
+  // verifiedUntil in the future (lib/queries.ts#withDistanceAndServiceTypes).
+  verifiedUntil  DateTime?
   products       Product[]
   services       Service[]
   rescueRequests RescueRequest[]
@@ -100,6 +107,7 @@ model ProviderProfile {
   updatedAt      DateTime        @updatedAt
 
   @@index([latitude, longitude])
+  @@index([userId])
 }
 
 // A provider's shop = their profile + their products. No separate Shop table.

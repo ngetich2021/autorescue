@@ -29,16 +29,18 @@ export function ProductFormModal({
   open,
   onOpenChange,
   product,
+  providerId,
   onSaved,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   product: MyProductDto | null;
+  providerId: string;
   onSaved: () => void;
 }) {
   const action = product
     ? updateProduct.bind(null, product.id)
-    : createProduct;
+    : createProduct.bind(null, providerId);
   const [state, formAction, pending] = useActionState(
     action,
     initialActionState,

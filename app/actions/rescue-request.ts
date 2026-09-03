@@ -8,7 +8,7 @@ import {
   rescueRequestSchema,
   updateRequestStatusSchema,
 } from "@/lib/validations";
-import { getMyShopId, hasShopPermission } from "@/lib/authz";
+import { hasShopPermission } from "@/lib/authz";
 import type { ActionState } from "@/app/actions/types";
 
 // Intentionally no auth check: a stranded driver never has to sign in to ask
@@ -61,16 +61,13 @@ export async function setRequestStatus(
     return { error: "Invalid status." };
   }
 
-  const providerId = await getMyShopId(session.user.id);
-  if (!providerId) return { error: "Create your provider listing first." };
-  if (!(await hasShopPermission(session.user.id, providerId, "MANAGE_REQUESTS"))) {
-    return { error: "You don't have permission to manage this shop's requests." };
-  }
-
-  const request = await db.rescueRequest.findFirst({
-    where: { id: parsed.data.requestId, providerId },
+  const request = await db.rescueRequest.findUnique({
+    where: { id: parsed.data.requestId },
   });
   if (!request) return { error: "Request not found." };
+  if (!(await hasShopPermission(session.user.id, request.providerId, "MANAGE_REQUESTS"))) {
+    return { error: "You don't have permission to manage this shop's requests." };
+  }
 
   await db.rescueRequest.update({
     where: { id: parsed.data.requestId },

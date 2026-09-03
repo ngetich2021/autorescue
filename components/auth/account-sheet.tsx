@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "next-auth/react";
 import type { Session } from "next-auth";
 import {
@@ -36,6 +36,7 @@ import { TeamModal } from "@/components/shop/team-modal";
 type AccountContext = {
   platform: { isMember: boolean; permissions: string[] };
   shop: { providerId: string; permissions: string[] } | null;
+  shops: { id: string; businessName: string }[];
 };
 
 export function AccountSheet({
@@ -54,6 +55,7 @@ export function AccountSheet({
   const [context, setContext] = useState<AccountContext | null>(null);
   const [signingOut, doSignOut] = useAsyncAction(() => signOut());
   const pathname = usePathname();
+  const router = useRouter();
   // Keep the sheet (and whatever page is behind it) visible while /admin
   // loads instead of closing immediately — only auto-close once the admin
   // page has actually landed, not just because we happen to already be
@@ -108,7 +110,7 @@ export function AccountSheet({
               className={cn(buttonVariants({ variant: "ghost" }), "justify-start")}
               onClick={() => onOpenChange(false)}
             >
-              <Store /> My shop
+              <Store /> {(context?.shops.length ?? 0) > 1 ? "My shops" : "My shop"}
             </Link>
             <Button
               variant="ghost"
@@ -154,7 +156,17 @@ export function AccountSheet({
         </SheetContent>
       </Sheet>
 
-      <ProviderProfileFormModal open={postOpen} onOpenChange={setPostOpen} />
+      <ProviderProfileFormModal
+        open={postOpen}
+        onOpenChange={setPostOpen}
+        providerId={null}
+        onSaved={(id) => {
+          setPostOpen(false);
+          onOpenChange(false);
+          router.push(`/shop/manage?shop=${id}`);
+        }}
+        onDeleted={() => {}}
+      />
       <MyAdsModal open={adsOpen} onOpenChange={setAdsOpen} />
       <SettingsModal open={settingsOpen} onOpenChange={setSettingsOpen} />
       {canManageTeam && (

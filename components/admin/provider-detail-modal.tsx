@@ -22,6 +22,8 @@ export type ProviderDetailRow = {
   latitude: number;
   longitude: number;
   isActive: boolean;
+  isVerified: boolean;
+  verifiedUntil: string | Date | null;
   // Date on the server-rendered initial load (app/admin/page.tsx), string
   // once refreshed via the JSON poll (/api/admin/data) — new Date() below
   // handles either.
@@ -43,6 +45,9 @@ export function ProviderDetailModal({
 }) {
   if (!provider) return null;
 
+  const verifiedUntil = provider.verifiedUntil ? new Date(provider.verifiedUntil) : null;
+  const verified = provider.isVerified && verifiedUntil != null && verifiedUntil > new Date();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
@@ -57,6 +62,11 @@ export function ProviderDetailModal({
           <DetailField label="Status">
             <Badge variant={provider.isActive ? "secondary" : "outline"}>
               {provider.isActive ? "Active" : "Deactivated"}
+            </Badge>
+          </DetailField>
+          <DetailField label="Verification">
+            <Badge variant={verified ? "secondary" : "outline"}>
+              {verified ? `Verified until ${verifiedUntil!.toLocaleDateString()}` : "Unverified"}
             </Badge>
           </DetailField>
           <DetailField label="Owner email">{provider.user.email ?? "—"}</DetailField>

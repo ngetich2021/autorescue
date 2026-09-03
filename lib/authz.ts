@@ -81,21 +81,54 @@ export async function hasShopPermission(
   return perms.has(permission);
 }
 
-// Resolves which shop a user acts on: the shop they own, else the first shop
-// they're an active member of. Returns null if neither applies.
-export async function getMyShopId(userId: string): Promise<string | null> {
-  const owned = await db.providerProfile.findUnique({
-    where: { userId },
-    select: { id: true },
-  });
-  if (owned) return owned.id;
+// Every shop a user acts on: the shops they own, then the shops they're an
+// active team member of — both oldest-first. A user's owned shops are never
+// also represented as ShopMember rows (see the schema comment on ShopRole),
+// so there's no overlap to dedupe.
+export async function getMyShops(
+  userId: string,
+): Promise<{ id: string; businessName: string; role: "owner" | "member" }[]> {
+  const [owned, memberships] = await Promise.all([
+    db.providerProfile.findMany({
+      where: { userId },
+      select: { id: true, businessName: true },
+      orderBy: { createdAt: "asc" },
+    }),
+    db.shopMember.findMany({
+      where: { userId, status: "ACTIVE" },
+      select: { provider: { select: { id: true, businessName: true } } },
+      orderBy: { createdAt: "asc" },
+    }),
+  ]);
 
-  const membership = await db.shopMember.findFirst({
-    where: { userId, status: "ACTIVE" },
-    select: { providerId: true },
-    orderBy: { createdAt: "asc" },
-  });
-  return membership?.providerId ?? null;
+  return [
+    ...owned.map((shop) => ({ ...shop, role: "owner" as const })),
+    ...memberships.map((m) => ({ ...m.provider, role: "member" as const })),
+  ];
+}
+
+// The shop to act on when a request doesn't name one explicitly: the user's
+// first owned shop, else the first shop they're an active member of. Returns
+// null if neither applies.
+export async function getMyDefaultShopId(userId: string): Promise<string | null> {
+  const [shop] = await getMyShops(userId);
+  return shop?.id ?? null;
+}
+
+// Resolves the shop a request should act on: an explicit `requestedId` (e.g.
+// a `?shop=` query param) if the user actually has access to it, otherwise
+// the default shop. Used by every /api/me/* route so a multi-shop user can
+// target a specific shop while single-shop users and old links keep working
+// unchanged.
+export async function resolveRequestedShopId(
+  userId: string,
+  requestedId: string | null,
+): Promise<string | null> {
+  if (requestedId) {
+    const perms = await getShopPermissions(userId, requestedId);
+    return perms.size > 0 ? requestedId : null;
+  }
+  return getMyDefaultShopId(userId);
 }
 
 const SUPER_ADMIN_ROLE_NAME = "Super Admin";

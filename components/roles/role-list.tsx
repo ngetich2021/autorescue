@@ -5,6 +5,14 @@ import { toast } from "sonner";
 import { Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { RoleFormModal, type RoleDto } from "./role-form-modal";
 import { useAsyncAction } from "@/lib/use-async-action";
 import type { ActionState } from "@/app/actions/types";
@@ -44,25 +52,41 @@ export function RoleList({
         <Plus /> Create role
       </Button>
 
-      {roles.length === 0 ? (
-        <p className="py-4 text-center text-sm text-muted-foreground">
-          No roles yet.
-        </p>
-      ) : (
-        roles.map((role) => (
-          <RoleRow
-            key={role.id}
-            role={role}
-            permissionCatalog={permissionCatalog}
-            deleteAction={deleteAction}
-            onChanged={onChanged}
-            onEdit={() => {
-              setEditing(role);
-              setFormOpen(true);
-            }}
-          />
-        ))
-      )}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Permissions</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {roles.length === 0 ? (
+            <TableRow>
+              <TableCell
+                colSpan={3}
+                className="py-4 text-center text-sm text-muted-foreground"
+              >
+                No roles yet.
+              </TableCell>
+            </TableRow>
+          ) : (
+            roles.map((role) => (
+              <RoleRow
+                key={role.id}
+                role={role}
+                permissionCatalog={permissionCatalog}
+                deleteAction={deleteAction}
+                onChanged={onChanged}
+                onEdit={() => {
+                  setEditing(role);
+                  setFormOpen(true);
+                }}
+              />
+            ))
+          )}
+        </TableBody>
+      </Table>
 
       <RoleFormModal
         key={editing?.id ?? "create"}
@@ -102,12 +126,14 @@ function RoleRow({
   });
 
   return (
-    <div className="flex items-start justify-between gap-3 rounded-lg border p-3">
-      <div className="flex flex-col gap-1">
+    <TableRow>
+      <TableCell className="font-medium">
         <div className="flex items-center gap-2">
-          <span className="font-medium">{role.name}</span>
+          {role.name}
           {role.isSystem && <Badge variant="outline">System</Badge>}
         </div>
+      </TableCell>
+      <TableCell className="whitespace-normal">
         <div className="flex flex-wrap gap-1">
           {perms.map((p) => (
             <Badge key={p} variant="secondary" className="text-xs">
@@ -115,26 +141,28 @@ function RoleRow({
             </Badge>
           ))}
         </div>
-      </div>
-      <div className="flex items-center gap-1">
-        <Button variant="ghost" size="icon-sm" disabled={deleting} onClick={onEdit}>
-          <Pencil />
-        </Button>
-        {!role.isSystem && (
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            disabled={deleting}
-            onClick={() => remove()}
-          >
-            {deleting ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <Trash2 className="text-destructive" />
-            )}
+      </TableCell>
+      <TableCell className="text-right">
+        <div className="flex items-center justify-end gap-1">
+          <Button variant="ghost" size="icon-sm" disabled={deleting} onClick={onEdit}>
+            <Pencil />
           </Button>
-        )}
-      </div>
-    </div>
+          {!role.isSystem && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              disabled={deleting}
+              onClick={() => remove()}
+            >
+              {deleting ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Trash2 className="text-destructive" />
+              )}
+            </Button>
+          )}
+        </div>
+      </TableCell>
+    </TableRow>
   );
 }

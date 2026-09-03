@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { haversineDistanceKm } from "@/lib/geo";
@@ -78,8 +78,16 @@ export function HeroBanner({
   // already sitting on the page until they reloaded it. Keeps polling even
   // while there's nothing to show (count === 0 below) — that's exactly the
   // "just got approved" moment this needs to catch.
+  const loadingRef = useRef(false);
   useEffect(() => {
     const interval = setInterval(() => {
+      // A stalled request (DB slow/unavailable) can outlive the poll tick —
+      // without this guard, every subsequent tick fires another overlapping
+      // fetch on top of the one still hanging, piling up concurrent requests
+      // against an already-serialized DB connection (see admin-dashboard.tsx,
+      // which hit the exact same pileup and was fixed the same way).
+      if (loadingRef.current) return;
+      loadingRef.current = true;
       fetch("/api/ads/hero", { cache: "no-store" })
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
@@ -87,7 +95,10 @@ export function HeroBanner({
           setBrandAds(data.brandAds ?? []);
           setShopAds(data.shopAds ?? []);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => {
+          loadingRef.current = false;
+        });
     }, AD_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
